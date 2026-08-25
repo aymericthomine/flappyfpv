@@ -129,8 +129,8 @@ const GAP = 4.6;
 const SPACING = 13;
 const SPAWN_Z = 78;
 const RADIUS = 0.32;
-const GRAVITY = -21, FLAP = 7.1, MAX_FALL = -16;
-const BASE_SPEED = 9.5;              // pipes per second ≈ BASE_SPEED / SPACING
+const GRAVITY = -18, FLAP = 6.6, MAX_FALL = -14;
+const BASE_SPEED = 7.6;              // pipes per second ≈ BASE_SPEED / SPACING
 
 const cam = { x: 0, y: 0, z: 0, vy: 0, pitch: 0 };
 let pipes = [], stars = [], towers = [];
@@ -591,9 +591,9 @@ function update(dt) {
   if (state === 'start') {
     cam.y = Math.sin(t * 1.6) * .45;
     cam.pitch = Math.sin(t * 1.6) * .05;
-    cam.z += 2.6 * dt;
+    cam.z += 2.1 * dt;
   } else if (state === 'play') {
-    speed = BASE_SPEED + Math.min(score * .09, 4.5);
+    speed = BASE_SPEED + Math.min(score * .07, 3.2);
     cam.vy = Math.max(MAX_FALL, cam.vy + GRAVITY * dt);
     cam.y += cam.vy * dt;
     cam.z += speed * dt;
@@ -648,7 +648,7 @@ function syncHud() {
 
 function render() {
   ctx.save();
-  if (shake > 0) ctx.translate((Math.random() - .5) * 14 * shake, (Math.random() - .5) * 14 * shake);
+  if (shake > 0) ctx.translate(0, (Math.random() - .5) * 16 * shake);   // vertical only
 
   drawSky();
   drawTowers();
