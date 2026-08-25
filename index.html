@@ -132,8 +132,8 @@ function pickPipeL(h, s, floorRgb, skyRgb) {
    Flappy FPV. Everything past it is generated. */
 const NEON = {
   sky: [[143, 52, 242], [123, 31, 219], [88, 18, 160]],
-  void: [123, 31, 219], floor: [86, 214, 46], pipe: [86, 214, 46],
-  lip: [128, 236, 78], tower: [78, 16, 148]
+  void: [123, 31, 219], floor: [44, 142, 52], pipe: [104, 224, 56],
+  lip: [156, 244, 96], tower: [78, 16, 148]
 };
 
 /* One dominant hue for the sky and the void, a companion hue for the
@@ -148,25 +148,28 @@ function zonePalette(i) {
   const a = rnd(i * 5 + 1), b = rnd(i * 5 + 2);
   const c = rnd(i * 5 + 3), d = rnd(i * 5 + 4);
   const dir = rnd(i * 5 + 5) < .5 ? 1 : -1;            // which way round the wheel
-  const sat = 0.40 + a * 0.48;
-  const lum = 0.72 + b * 0.52;                         // overall brightness mood
+  // The hues are free, the values are not: a bright sky over a deep corridor,
+  // every time. Letting saturation and lightness roam is what produced the
+  // washed-out and the muddy zones — the ranges here are deliberately narrow.
+  const sat = .58 + a * .26;
+  const lum = .88 + b * .2;
   const hFloor = h + dir * (0.26 + c * 0.12);
   const hPipe  = h + dir * (0.44 + d * 0.14);
   const cl = v => Math.max(0.04, Math.min(0.92, v));
   const sky = [
-    hsl(h, sat * .82, cl(.62 * lum)),
-    hsl(h, sat * .94, cl(.40 * lum)),
-    hsl(h + .04, sat, cl(.17 * lum))
+    hsl(h, sat * .74, cl(.60 * lum)),
+    hsl(h, sat * .92, cl(.34 * lum)),
+    hsl(h + .05, sat, cl(.12 * lum))
   ];
-  const floor = hsl(hFloor, sat * .80, cl(.46 * lum));
+  const floor = hsl(hFloor, sat * .78, cl(.38 * lum));
   const lPipe = pickPipeL(hPipe, .80, floor, sky[1]);
   return {
     sky: sky,
-    void:  hsl(h, sat * .90, cl(.34 * lum)),
+    void:  hsl(h, sat * .92, cl(.26 * lum)),
     floor: floor,
     pipe:  hsl(hPipe, .80, lPipe),
     lip:   hsl(hPipe, .66, Math.min(.90, lPipe + .22)),
-    tower: hsl(h, sat * .85, cl(.13 * lum))
+    tower: hsl(h, sat * .8, cl(.10 * lum))
   };
 }
 
@@ -319,7 +322,7 @@ function path(poly) {
 
 /* --------------------------------------------------------------- colours */
 const fogStart = 24, fogEnd = 72;      // pipes
-const SLAB_FOG  = [0.55, 15, 36];      // [strength, start, end] floor / ceiling
+const SLAB_FOG  = [0.82, 12, 32];      // [strength, start, end] floor / ceiling
 const TOWER_FOG = [0.92, 10, 70];
 
 /* fog lets the corridor dissolve into the void while the pipes, which need
@@ -333,9 +336,12 @@ function shade(rgb, mul, z, fog) {
   const r = rgb[0] * mul * (1 - f) + v[0] * f;
   const g = rgb[1] * mul * (1 - f) + v[1] * f;
   const b = rgb[2] * mul * (1 - f) + v[2] * f;
-  return 'rgb(' + (r | 0) + ',' + (g | 0) + ',' + (b | 0) + ')';
+  return 'rgb(' + q(r) + ',' + q(g) + ',' + q(b) + ')';
 }
-const css = rgb => 'rgb(' + (rgb[0] | 0) + ',' + (rgb[1] | 0) + ',' + (rgb[2] | 0) + ')';
+/* Every colour lands on a rung of a 32-step ladder. A limited palette is
+   what separates pixel art from a small screenshot. */
+const q = v => Math.min(248, Math.max(0, Math.round(v / 8) * 8));
+const css = rgb => 'rgb(' + q(rgb[0]) + ',' + q(rgb[1]) + ',' + q(rgb[2]) + ')';
 
 const FACE = { front: 1.0, back: .66, left: .74, right: .82, top: 1.22, bottom: .52 };
 
@@ -369,6 +375,21 @@ function box(x0, x1, y0, y1, z0, z1, rgb, fog, outline) {
   }
 }
 
+/* A flat front face reads as cardboard. One lit band and one shaded band
+   down the face, and the same box reads as a tube. */
+function pipeShading(y0, y1, z) {
+  if (cam.z >= z || y1 - y0 < .2) return;
+  const d = Math.max(NEAR, z - cam.z);
+  const l0 = -PIPE_W / 2 + PIPE_W * .13, l1 = -PIPE_W / 2 + PIPE_W * .33;
+  if (path([toCam(l0, y0, z), toCam(l1, y0, z), toCam(l1, y1, z), toCam(l0, y1, z)])) {
+    ctx.fillStyle = shade(P.pipe, 1.3, d); ctx.fill();
+  }
+  const r0 = PIPE_W / 2 - PIPE_W * .2;
+  if (path([toCam(r0, y0, z), toCam(PIPE_W / 2, y0, z), toCam(PIPE_W / 2, y1, z), toCam(r0, y1, z)])) {
+    ctx.fillStyle = shade(P.pipe, .74, d); ctx.fill();
+  }
+}
+
 function drawPipe(p) {
   const gapB = p.gapY - GAP / 2, gapT = p.gapY + GAP / 2;
   const x0 = -PIPE_W / 2, x1 = PIPE_W / 2;
@@ -378,38 +399,88 @@ function drawPipe(p) {
 
   box(x0, x1, FLOOR, gapB - CAP_H, z0, z1, P.pipe);      // bottom body
   box(x0, x1, gapT + CAP_H, CEIL, z0, z1, P.pipe);       // top body
+  pipeShading(FLOOR, gapB - CAP_H, z0);
+  pipeShading(gapT + CAP_H, CEIL, z0);
   box(cx0, cx1, gapB - CAP_H, gapB, cz0, cz1, P.lip);    // bottom lip
   box(cx0, cx1, gapT, gapT + CAP_H, cz0, cz1, P.lip);    // top lip
 }
 
 /* -------------------------------------------------------------- scenery */
-/* Flat bands rather than a gradient: a smooth ramp is the one thing that
-   gives away that the pixels are fake. */
-const SKY_BANDS = 12;
-function drawSky() {
-  for (let i = 0; i < SKY_BANDS; i++) {
-    const u = i / (SKY_BANDS - 1);
+/* Three colours and a 4x4 Bayer matrix. Ordered dithering is the oldest way
+   to make a gradient out of almost nothing, and still the one that looks
+   hand-made rather than computed: nine tones, scattered, instead of a ramp.
+   The sky is rebuilt only when the eased palette has actually moved. */
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+const SKY_STEPS = 5;
+const skyCv = document.createElement('canvas');
+const skyCtx = skyCv.getContext('2d');
+let skyKey = '';
+
+function buildSky() {
+  if (skyCv.width !== W || skyCv.height !== H) { skyCv.width = W; skyCv.height = H; }
+  const img = skyCtx.createImageData(W, H), d = img.data;
+  for (let y = 0; y < H; y++) {
+    const u = y / (H - 1);
     const a = u < .5 ? P.sky[0] : P.sky[1], b = u < .5 ? P.sky[1] : P.sky[2];
-    const k = u < .5 ? u * 2 : (u - .5) * 2;
-    ctx.fillStyle = 'rgb(' + ((a[0] + (b[0] - a[0]) * k) | 0) + ',' +
-                             ((a[1] + (b[1] - a[1]) * k) | 0) + ',' +
-                             ((a[2] + (b[2] - a[2]) * k) | 0) + ')';
-    const y0 = Math.floor(H * i / SKY_BANDS), y1 = Math.floor(H * (i + 1) / SKY_BANDS);
-    ctx.fillRect(0, y0, W, y1 - y0);
+    const k = (u < .5 ? u * 2 : (u - .5) * 2) * (SKY_STEPS - 1);
+    const lo = Math.min(SKY_STEPS - 2, Math.floor(k)), fr = k - lo;
+    for (let x = 0; x < W; x++) {
+      const on = fr > (BAYER[(y & 3) * 4 + (x & 3)] + .5) / 16 ? 1 : 0;
+      const step = (lo + on) / (SKY_STEPS - 1);
+      const i = (y * W + x) << 2;
+      d[i]     = a[0] + (b[0] - a[0]) * step;
+      d[i + 1] = a[1] + (b[1] - a[1]) * step;
+      d[i + 2] = a[2] + (b[2] - a[2]) * step;
+      d[i + 3] = 255;
+    }
   }
+  skyCtx.putImageData(img, 0, 0);
+}
+
+function drawSky() {
+  const key = W + '|' + P.sky.map(c => c.map(v => v >> 3).join()).join();
+  if (key !== skyKey) { skyKey = key; buildSky(); }
+  ctx.drawImage(skyCv, 0, 0);
 }
 
 /* Slabs are drawn as depth strips so the fog is computed per-distance
    instead of as a flat screen-space gradient. */
-function drawSlab(y, rgb, mul) {
-  const near = -8, far = SLAB_FOG[2], segs = 26;
-  for (let i = segs - 1; i >= 0; i--) {
-    const z0 = cam.z + near + (far - near) * (i / segs);
-    const z1 = cam.z + near + (far - near) * ((i + 1) / segs) + 0.15;
-    if (!path([toCam(-HALF_W, y, z0), toCam(HALF_W, y, z0),
-               toCam(HALF_W, y, z1), toCam(-HALF_W, y, z1)])) continue;
-    ctx.fillStyle = shade(rgb, mul, Math.max(NEAR, (z0 + z1) / 2 - cam.z), SLAB_FOG);
+/* Light panels overhead. The ceiling is half the screen and had nothing to
+   say; strung out at a fixed spacing they stream past, which is also the
+   clearest read the player gets on how fast the corridor is moving. */
+const LAMP = 8.4;
+function ceilingLights() {
+  const first = Math.floor(cam.z / LAMP);
+  for (let k = 5; k >= 0; k--) {
+    const z = (first + k) * LAMP, d = z - cam.z;
+    if (d < NEAR || d > SLAB_FOG[2]) continue;
+    if (!path([toCam(-2.4, CEIL - .03, z), toCam(2.4, CEIL - .03, z),
+               toCam(2.4, CEIL - .03, z + 1.5), toCam(-2.4, CEIL - .03, z + 1.5)])) continue;
+    ctx.fillStyle = shade(P.lip, 1.1, Math.max(NEAR, d), SLAB_FOG);
     ctx.fill();
+  }
+}
+
+const TILE = 4.2, TILE_COLS = 5;
+const lerp3 = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+/* Tiles anchored in the world, not to the camera, so the floor streams past
+   instead of sitting still under you. Two shades in a checker is all it takes
+   to feel the speed — a hairline grid never did. */
+function drawSlab(y, rgb, mul) {
+  const near = -8, far = SLAB_FOG[2];
+  const first = Math.floor((cam.z + near) / TILE);
+  const span = HALF_W * 2 / TILE_COLS;
+  for (let k = Math.ceil((far - near) / TILE); k >= 0; k--) {
+    const za = (first + k) * TILE, zb = za + TILE + .1;
+    if (zb - cam.z < NEAR) continue;
+    const d = Math.max(NEAR, (za + zb) / 2 - cam.z);
+    for (let c = 0; c < TILE_COLS; c++) {
+      const xa = -HALF_W + span * c, xb = xa + span + .04;
+      if (!path([toCam(xa, y, za), toCam(xb, y, za), toCam(xb, y, zb), toCam(xa, y, zb)])) continue;
+      const dark = ((first + k + c) & 1) === 0;
+      ctx.fillStyle = shade(dark ? lerp3(rgb, P.void, .2) : rgb, mul * (dark ? .84 : 1), d, SLAB_FOG);
+      ctx.fill();
+    }
   }
 }
 
@@ -443,36 +514,27 @@ function drawTower(w) {
   }
 }
 
+/* Lit windows, on the near ones only — far enough away the fog eats them
+   anyway, and a skyline with a few lights on is a place rather than a shape. */
+function towerLights(w) {
+  const z = w.z - w.d / 2, d = z - cam.z;
+  if (d < NEAR || d > 34) return;
+  ctx.fillStyle = shade(P.lip, .72, d, TOWER_FOG);
+  const rows = 3 + ((w.tint * 7) | 0) % 3;
+  for (let r = 0; r < rows; r++) {
+    const y = BASE_Y + w.h * (.24 + .58 * (rows < 2 ? .5 : r / (rows - 1)));
+    const x = w.x - w.w * .22 + ((r + (w.tilt > 0 ? 1 : 0)) % 2) * w.w * .3;
+    if (path([toCam(x, y, z), toCam(x + w.w * .17, y, z),
+              toCam(x + w.w * .17, y + w.h * .045, z), toCam(x, y + w.h * .045, z)])) ctx.fill();
+  }
+}
+
 function drawTowers() {
   const sorted = towers.slice().sort((a, b) => b.z - a.z);
   for (const w of sorted) {
     if (w.z - cam.z < NEAR) continue;
     drawTower(w);
-  }
-}
-
-function drawGrid() {
-  ctx.lineWidth = 1;
-  const off = ((cam.z % 4) + 4) % 4;
-  for (let i = 0; i < 20; i++) {
-    const z = i * 4 - off + cam.z;
-    const d = z - cam.z;
-    if (d < NEAR) continue;
-    const a = 0.16 * Math.max(0, 1 - d / SLAB_FOG[2]);
-    if (a <= 0.01) continue;
-    ctx.strokeStyle = 'rgba(255,255,255,' + a.toFixed(3) + ')';
-    for (const y of [FLOOR + .02, CEIL - .02]) {
-      if (path([toCam(-HALF_W, y, z), toCam(HALF_W, y, z),
-                toCam(HALF_W, y, z + .06), toCam(-HALF_W, y, z + .06)])) ctx.stroke();
-    }
-  }
-  for (let i = -6; i <= 6; i++) {
-    const x = i * 2.2;
-    ctx.strokeStyle = 'rgba(255,255,255,0.07)';
-    for (const y of [FLOOR + .02, CEIL - .02]) {
-      if (path([toCam(x, y, cam.z + NEAR + .1), toCam(x + .05, y, cam.z + NEAR + .1),
-                toCam(x + .05, y, cam.z + SLAB_FOG[2]), toCam(x, y, cam.z + SLAB_FOG[2])])) ctx.stroke();
-    }
+    towerLights(w);
   }
 }
 
@@ -507,9 +569,18 @@ function drawGuide() {
   const z = next.z - PIPE_D / 2 - CAP_OUT;
   const x0 = -PIPE_W / 2 - CAP_OUT, x1 = PIPE_W / 2 + CAP_OUT;
   const y0 = next.gapY - GAP / 2, y1 = next.gapY + GAP / 2;
-  if (!path([toCam(x0, y0, z), toCam(x1, y0, z), toCam(x1, y1, z), toCam(x0, y1, z)])) return;
+  const pr = v => v.z < NEAR ? null : { x: cx + focal * v.x / v.z, y: cy - focal * v.y / v.z };
+  const c = [pr(toCam(x0, y1, z)), pr(toCam(x1, y1, z)), pr(toCam(x1, y0, z)), pr(toCam(x0, y0, z))];
+  if (c.some(v => !v)) return;
+  const len = Math.max(2, Math.min(7, (c[1].x - c[0].x) * .26));
   ctx.strokeStyle = 'rgba(255,255,255,' + a.toFixed(3) + ')';
   ctx.lineWidth = 1;
+  ctx.beginPath();
+  const arms = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
+  for (let i = 0; i < 4; i++) {
+    const v = c[i], s2 = arms[i];
+    ctx.moveTo(v.x, v.y + len * s2[1]); ctx.lineTo(v.x, v.y); ctx.lineTo(v.x + len * s2[0], v.y);
+  }
   ctx.stroke();
 }
 
@@ -582,11 +653,13 @@ function textC(str, xc, y, s, col, outline) {
   text(str, x, y, s, col);
 }
 function panel(x, y, w, h) {
-  ctx.fillStyle = 'rgba(6,6,14,.88)';
+  ctx.fillStyle = 'rgba(0,0,0,.5)';
+  ctx.fillRect(x + 3, y + 3, w, h);        // a hard drop shadow, never a blur
+  ctx.fillStyle = '#0a0812';
   ctx.fillRect(x, y, w, h);
   ctx.fillStyle = css(P.lip);
-  ctx.fillRect(x, y, w, 1); ctx.fillRect(x, y + h - 1, w, 1);
-  ctx.fillRect(x, y, 1, h); ctx.fillRect(x + w - 1, y, 1, h);
+  ctx.fillRect(x, y, w, 2); ctx.fillRect(x, y + h - 2, w, 2);
+  ctx.fillRect(x, y, 2, h); ctx.fillRect(x + w - 2, y, 2, h);
 }
 
 function drawUI() {
@@ -715,20 +788,15 @@ function render() {
 
   drawSky();
   drawTowers();
-  drawSlab(CEIL, P.floor, .62);
+  drawSlab(CEIL, P.floor, .44);
+  ceilingLights();
   drawSlab(FLOOR, P.floor, 1.05);
-  drawGrid();
   drawStars();
 
   const sorted = pipes.slice().sort((a, b) => b.z - a.z);
   for (const p of sorted) drawPipe(p);
   drawGuide();
 
-  const v = ctx.createRadialGradient(cx, cy, H * .3, cx, cy, H * .78);
-  v.addColorStop(0, 'rgba(0,0,0,0)');
-  v.addColorStop(1, 'rgba(0,0,0,.42)');
-  ctx.fillStyle = v;
-  ctx.fillRect(-40, -40, W + 80, H + 80);
   ctx.restore();
 
   // dim behind the overlays so a card reads against any palette

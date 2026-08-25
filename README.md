@@ -31,6 +31,31 @@ Everything lives in `index.html`: a small 3D engine written on a 2D canvas.
   for the pipes (which stay readable), quantised into six flat bands so depth
   reads as steps rather than a blur
 
+### Drawing it like pixel art, not like a small screenshot
+
+The buffer alone only makes the pixels big. What makes the picture read is
+craft applied per surface:
+
+- the sky is **ordered dithering**, not a gradient: three colours through a
+  4×4 Bayer matrix give nine scattered tones, rebuilt only when the eased
+  palette has actually moved
+- the corridor is a **checkerboard anchored in the world**, so it streams past
+  instead of sitting still under you; the dark tiles are mixed a fifth of the
+  way toward the void, which ties the floor to the sky
+- the ceiling carries **light panels** at a fixed spacing — it is half the
+  screen and had nothing to say, and they double as the clearest read on speed
+- each pipe gets a **lit band and a shaded band** down its face: a flat front
+  reads as cardboard, two more quads read as a tube
+- the near towers have **lit windows**, which is the difference between a
+  skyline and a row of shapes
+- every colour lands on a rung of a 32-step ladder — a limited palette is what
+  separates pixel art from a small screenshot
+
+Zone colours are still generated, but only the hues roam. Saturation and
+lightness are held in narrow bands with a fixed value structure — a bright sky
+over a deep corridor, every time — because letting them roam is exactly what
+produced the washed-out zones and the muddy ones.
+
 ### Playing fair
 
 Three rules keep a death felt like your own fault:
