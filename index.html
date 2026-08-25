@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#08060f">
-<meta name="description" content="Two one-finger games: fly a first-person corridor, or thread a hoop along a wire.">
+<meta name="description" content="First-person 3D Flappy Bird. Tap to fly.">
 <!-- the game is one file, so a stale cached copy is a stale build: always revalidate -->
 <meta http-equiv="Cache-Control" content="no-cache">
-<title>Flappy FPV &amp; Ring</title>
+<title>Flappy FPV</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%237b1fdb'/><rect x='8' y='4' width='16' height='9' fill='%2356d62e'/><rect x='8' y='19' width='16' height='9' fill='%2356d62e'/></svg>">
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
@@ -81,8 +81,7 @@ const BASE_SPEED = 7.6;              // pipes per second ≈ BASE_SPEED / SPACIN
 const cam = { x: 0, y: 0, z: 0, vy: 0, pitch: 0 };
 let pipes = [], stars = [], towers = [];
 let speed = BASE_SPEED, score = 0, best = 0, shake = 0;
-let fpvState = 'start';
-let mode = 'home';                   // 'home' | 'fpv' | 'ring'
+let state = 'start';
 let t = 0, lastTs = 0, deadAt = -9, poppedAt = -9;
 
 try { best = parseInt(localStorage.getItem('flappyFpvBest') || '0', 10) || 0; } catch (e) { best = 0; }
@@ -273,7 +272,7 @@ function addPipe(z) {
   pipes.push({ z, gapY: lastGapY, scored: false });
 }
 
-function resetFpv() {
+function reset() {
   cam.x = 0; cam.y = 0; cam.z = 0; cam.vy = 0; cam.pitch = 0;
   pipes = []; score = 0; speed = BASE_SPEED; shake = 0; lastGapY = 0;
   for (let i = 0; i < 6; i++) addPipe(30 + i * SPACING);
@@ -336,7 +335,6 @@ function shade(rgb, mul, z, fog) {
   const b = rgb[2] * mul * (1 - f) + v[2] * f;
   return 'rgb(' + (r | 0) + ',' + (g | 0) + ',' + (b | 0) + ')';
 }
-const mix = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
 const css = rgb => 'rgb(' + (rgb[0] | 0) + ',' + (rgb[1] | 0) + ',' + (rgb[2] | 0) + ')';
 
 const FACE = { front: 1.0, back: .66, left: .74, right: .82, top: 1.22, bottom: .52 };
@@ -496,7 +494,7 @@ function drawStars() {
 /* In first person the hard part is reading how high the next gap sits.
    Outline its opening, faintly, and only once it is close enough to matter. */
 function drawGuide() {
-  if (fpvState !== 'play') return;
+  if (state !== 'play') return;
   let next = null;
   for (const p of pipes) if (p.z > cam.z && (!next || p.z < next.z)) next = p;
   if (!next) return;
@@ -583,30 +581,22 @@ function textC(str, xc, y, s, col, outline) {
   }
   text(str, x, y, s, col);
 }
-function panel(x, y, w, h, border, fill) {
-  ctx.fillStyle = fill || 'rgba(6,6,14,.88)';
+function panel(x, y, w, h) {
+  ctx.fillStyle = 'rgba(6,6,14,.88)';
   ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = border || css(P.lip);
+  ctx.fillStyle = css(P.lip);
   ctx.fillRect(x, y, w, 1); ctx.fillRect(x, y + h - 1, w, 1);
   ctx.fillRect(x, y, 1, h); ctx.fillRect(x + w - 1, y, 1, h);
 }
 
-function drawBack(col) {
-  const c = col || 'rgba(255,255,255,.5)';
-  ctx.fillStyle = c;
-  for (let i = 0; i < 3; i++) ctx.fillRect(5 + i, 8 - i, 1, 1 + i * 2);
-  text('MENU', 11, 5, 1, c);
-}
-
-function drawFpvUI() {
+function drawUI() {
   const blink = (t % 1.3) < .82;
-  if (fpvState !== 'play') drawBack();
-  if (fpvState === 'play') {
+  if (state === 'play') {
     const s = t - poppedAt < .13 ? 5 : 4;          // the score jumps on a point
     textC(String(score), cx, Math.round(H * .07), s, '#fff', '#000');
     return;
   }
-  if (fpvState === 'start') {
+  if (state === 'start') {
     const w = Math.min(W - 10, 118), x = Math.round(cx - w / 2), y = Math.round(cy - 41);
     panel(x, y, w, 82);
     textC('FLAPPY', cx, y + 12, 2, '#fff');
@@ -645,20 +635,20 @@ function beep(freq, dur, type, vol) {
 }
 
 /* ------------------------------------------------------------------ loop */
-function flapFpv() {
-  if (fpvState === 'dead') {
+function flap() {
+  if (state === 'dead') {
     if (t - deadAt < .55) return;   // ignore the tap that killed you
-    resetFpv();
-    fpvState = 'play';
+    reset();
+    state = 'play';
     return;
   }
-  fpvState = 'play';                   // the tap that starts the run also flaps,
+  state = 'play';                   // the tap that starts the run also flaps,
   cam.vy = FLAP;                    // so a run never opens on a free fall
   beep(520, .09, 'square', .045);
 }
 
-function dieFpv() {
-  fpvState = 'dead'; deadAt = t; shake = 1;
+function die() {
+  state = 'dead'; deadAt = t; shake = 1;
   beep(160, .35, 'sawtooth', .07);
   if (score > best) {
     best = score;
@@ -666,12 +656,14 @@ function dieFpv() {
   }
 }
 
-function updateFpv(dt) {
-  if (fpvState === 'start') {
+function update(dt) {
+  t += dt;
+
+  if (state === 'start') {
     cam.y = Math.sin(t * 1.6) * .45;
     cam.pitch = Math.sin(t * 1.6) * .05;
     cam.z += 2.1 * dt;
-  } else if (fpvState === 'play') {
+  } else if (state === 'play') {
     speed = BASE_SPEED + Math.min(score * .07, 3.2);
     cam.vy = Math.max(MAX_FALL, cam.vy + GRAVITY * dt);
     cam.y += cam.vy * dt;
@@ -680,12 +672,12 @@ function updateFpv(dt) {
     // the ceiling is a wall you scrape along, not a trap: only the floor
     // and the pipes end a run
     if (cam.y + RADIUS > CEIL) { cam.y = CEIL - RADIUS; if (cam.vy > 0) cam.vy = 0; }
-    if (cam.y - RADIUS < FLOOR) { cam.y = FLOOR + RADIUS; dieFpv(); }
+    if (cam.y - RADIUS < FLOOR) { cam.y = FLOOR + RADIUS; die(); }
 
     for (const p of pipes) {
       const half = PIPE_D / 2 + CAP_OUT + HIT;
       if (Math.abs(p.z - cam.z) < half) {
-        if (cam.y - HIT < p.gapY - GAP / 2 || cam.y + HIT > p.gapY + GAP / 2) { dieFpv(); break; }
+        if (cam.y - HIT < p.gapY - GAP / 2 || cam.y + HIT > p.gapY + GAP / 2) { die(); break; }
       }
       if (!p.scored && p.z < cam.z) {
         p.scored = true; score++; poppedAt = t;
@@ -701,8 +693,8 @@ function updateFpv(dt) {
   easeZone(dt);
 
   // once dead, level the view back up so the crash still shows the corridor
-  const wantPitch = fpvState === 'play' ? Math.max(-.34, Math.min(.26, cam.vy * .03))
-                  : fpvState === 'dead' ? .12 : cam.pitch;
+  const wantPitch = state === 'play' ? Math.max(-.34, Math.min(.26, cam.vy * .03))
+                  : state === 'dead' ? .12 : cam.pitch;
   cam.pitch += (wantPitch - cam.pitch) * Math.min(1, dt * 9);
 
   // recycle
@@ -717,7 +709,7 @@ function updateFpv(dt) {
   for (const w of towers) if (w.z < cam.z - 6) seedTower(w, cam.z + SPAWN_Z + Math.random() * 20);
 }
 
-function renderFpv() {
+function render() {
   ctx.save();
   if (shake > 0) ctx.translate(0, Math.round((Math.random() - .5) * 5 * shake));   // vertical, whole pixels
 
@@ -740,269 +732,36 @@ function renderFpv() {
   ctx.restore();
 
   // dim behind the overlays so a card reads against any palette
-  const dim = fpvState === 'dead' ? Math.min(.5, (t - deadAt) * 1.6)
-            : fpvState === 'start' ? .3 : 0;
+  const dim = state === 'dead' ? Math.min(.5, (t - deadAt) * 1.6)
+            : state === 'start' ? .3 : 0;
   if (dim > 0) {
     ctx.fillStyle = 'rgba(6,2,14,' + dim.toFixed(3) + ')';
     ctx.fillRect(0, 0, W, H);
   }
 
-  drawFpvUI();
+  drawUI();
+
+  // and now the only line that touches the screen: the small frame, blown up
+  sctx.clearRect(0, 0, SW, SH);
+  sctx.drawImage(buf, 0, 0, SW, SH);
 }
 
-/* ------------------------------------------------------------ game: ring
-   A hoop threaded on a wire. Hold to lift it, let go and it drops, and the
-   wire has to keep running clean through the hole. The hoop reddens as the
-   wire nears the band — that colour is the only warning you get. */
-const WIRE = '#232838', CREAM = '#f2e8da', SAND = '#e7dac4';
-const GOLD = [232, 163, 61], RED = [224, 64, 42];
-const R_SPEED = .15, R_PULL = .19, R_EASE = 7;   // fractions of the buffer height
-                                                // per second, so the feel of the
-                                                // hoop does not depend on the screen
-
-let rState = 'start', rNodes = [], rScroll = 0, rY = 0, rVy = 0;
-let rScore = 0, rBest = 0, rDeadAt = -9, rPop = -9, rHold = false, rFade = 0;
-
-try { rBest = parseInt(localStorage.getItem('ringBest') || '0', 10) || 0; } catch (e) { rBest = 0; }
-
-function ringGeom() {
-  const rx = Math.max(9, Math.round(W * .125));
-  return { x: Math.round(W * .34), rx, ry: Math.round(rx * 1.26), band: Math.max(2, Math.round(rx * .27)) };
-}
-function ringLane() { return { lo: H * .22, hi: H * .84 }; }
-
-/* The wire is a polyline built one node ahead of the hoop; it steepens with
-   the score, and folds back on itself rather than leaving the lane. */
-function ringAddNode() {
-  const last = rNodes[rNodes.length - 1];
-  const span = W * (.18 + Math.random() * .26);
-  const hard = Math.min(1, rScore / 34);
-  const slope = (.22 + .48 * hard) * (.45 + Math.random() * .55);
-  const lane = ringLane();
-  let y = last.y + span * slope * (Math.random() < .5 ? -1 : 1);
-  if (y < lane.lo || y > lane.hi) y = last.y - (y - last.y);
-  rNodes.push({ x: last.x + span, y: Math.max(lane.lo, Math.min(lane.hi, y)), scored: false });
-}
-
-function ringWireY(x) {
-  for (let i = 1; i < rNodes.length; i++) {
-    const a = rNodes[i - 1], b = rNodes[i];
-    if (x <= b.x) return a.y + (b.y - a.y) * Math.max(0, Math.min(1, (x - a.x) / (b.x - a.x)));
-  }
-  return rNodes[rNodes.length - 1].y;
-}
-
-/* The hoop is a tube the wire must stay inside: sample across its depth and
-   keep the worst offender. 1 is dead centre, 0 is metal on metal — which is
-   why a steep run is hard, the wire crosses the whole tube. */
-function ringClearance() {
-  const g = ringGeom(), room = g.ry - g.band - 1.2;
-  let worst = room;
-  for (let i = -2; i <= 2; i++) worst = Math.min(worst, room - Math.abs(ringWireY(rScroll + i * g.rx / 2) - rY));
-  return worst / room;
-}
-
-function resetRing() {
-  const lane = ringLane();
-  rY = (lane.lo + lane.hi) / 2;
-  rVy = 0; rScore = 0; rScroll = 0; rFade = 0; rPop = -9;
-  rNodes = [{ x: -W, y: rY, scored: true }, { x: W * .3, y: rY, scored: true }];
-  while (rNodes[rNodes.length - 1].x < W + 80) ringAddNode();
-}
-
-function dieRing() {
-  rState = 'dead'; rDeadAt = t; rFade = 1;
-  beep(120, .4, 'sawtooth', .06);
-  if (rScore > rBest) {
-    rBest = rScore;
-    try { localStorage.setItem('ringBest', String(rBest)); } catch (e) { /* ignore */ }
-  }
-}
-
-function updateRing(dt) {
-  const lane = ringLane();
-  if (rState === 'play') {
-    rScroll += H * (R_SPEED + Math.min(.09, rScore * .0025)) * dt;
-    rVy += ((rHold ? -1 : 1) * H * R_PULL - rVy) * Math.min(1, dt * R_EASE);
-    rY = Math.max(8, Math.min(H - 8, rY + rVy * dt));
-    if (ringClearance() <= 0) dieRing();
-    for (const n of rNodes) {
-      if (!n.scored && n.x < rScroll) { n.scored = true; rScore++; rPop = t; beep(760, .05, 'square', .03); }
-    }
-  } else if (rState === 'dead') {
-    rFade = Math.max(0, rFade - dt * 1.1);
-  } else {
-    rY = (lane.lo + lane.hi) / 2 + Math.sin(t * 1.5) * 5;
-    rScroll += H * .05 * dt;
-  }
-  while (rNodes[rNodes.length - 1].x < rScroll + W + 60) ringAddNode();
-  if (rNodes.length > 4 && rNodes[1].x < rScroll - W) rNodes.shift();
-}
-
-function renderRing() {
-  const g = ringGeom();
-  ctx.fillStyle = CREAM; ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = SAND; ctx.fillRect(0, Math.round(H * .88), W, H);
-
-  ctx.strokeStyle = WIRE;
-  ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  ctx.beginPath();
-  for (let i = 0; i < rNodes.length; i++) {
-    const sx = g.x + (rNodes[i].x - rScroll);
-    i ? ctx.lineTo(sx, rNodes[i].y) : ctx.moveTo(sx, rNodes[i].y);
-  }
-  ctx.stroke();
-
-  const heat = rState === 'dead' ? 1 : Math.max(0, 1 - ringClearance() / .5);
-  const col = mix(GOLD, RED, heat);
-  ctx.globalAlpha = rState === 'dead' ? rFade : 1;
-  ctx.lineWidth = g.band;
-  ctx.strokeStyle = css(col);
-  ctx.beginPath();
-  ctx.ellipse(g.x, rY, g.rx - g.band / 2, g.ry - g.band / 2, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.lineWidth = Math.max(1, Math.round(g.band / 2.4));      // the shaded side
-  ctx.strokeStyle = css(mix(col, [0, 0, 0], .3));
-  ctx.beginPath();
-  ctx.ellipse(g.x, rY, g.rx - g.band / 2, g.ry - g.band / 2, 0, Math.PI * .58, Math.PI * 1.32);
-  ctx.stroke();
-  ctx.globalAlpha = 1;
-
-  const blink = (t % 1.3) < .82;
-  if (rState === 'play') {
-    const sc = t - rPop < .13 ? 5 : 4;
-    textC(String(rScore), cx, Math.round(H * .07), sc, WIRE, CREAM);
-    return;
-  }
-  drawBack('rgba(58,52,46,.6)');
-  if (rState === 'start') {
-    const w = Math.min(W - 10, 118), x = Math.round(cx - w / 2), y = Math.round(cy - 41);
-    panel(x, y, w, 82, WIRE, 'rgba(242,232,218,.94)');
-    textC('RING', cx, y + 12, 4, WIRE);
-    textC('HOLD TO LIFT', cx, y + 44, 1, '#7a6f60');
-    textC('KEEP IT CLEAN', cx, y + 54, 1, '#7a6f60');
-    if (blink) textC('HOLD TO START', cx, y + 68, 1, WIRE);
-    return;
-  }
-  const w = Math.min(W - 10, 122), x = Math.round(cx - w / 2), y = Math.round(cy - 46);
-  panel(x, y, w, 92, WIRE, 'rgba(242,232,218,.94)');
-  textC('TOUCHED', cx, y + 10, 2, css(RED));
-  ctx.fillStyle = WIRE; ctx.fillRect(x + 10, y + 30, w - 20, 1);
-  textC('TURNS', x + w * .28, y + 38, 1, '#7a6f60');
-  textC(String(rScore), x + w * .28, y + 48, 2, WIRE);
-  textC('BEST', x + w * .72, y + 38, 1, '#7a6f60');
-  textC(String(rBest), x + w * .72, y + 48, 2, css(GOLD));
-  if (t - rDeadAt > .55 && blink) textC('HOLD TO RETRY', cx, y + 76, 1, WIRE);
-}
-
-/* ------------------------------------------------------------------ home */
-let homeSel = 0;
-
-function homeCards() {
-  const w = Math.min(W - 14, 118), x = Math.round(cx - w / 2), h = 46, gap = 11;
-  const top = Math.round(cy - (h * 2 + gap) / 2 + 8);
-  return [
-    { id: 'fpv',  x, y: top,               w, h, name: 'FLAPPY FPV', best: best,  tint: '#8bff5a' },
-    { id: 'ring', x, y: top + h + gap,     w, h, name: 'RING',       best: rBest, tint: '#e8a33d' }
-  ];
-}
-
-/* Each card carries a drawing of its own game: a gap between two pipes, and
-   a wire through a hoop. */
-function homeIcon(id, x, y, tint) {
-  if (id === 'fpv') {
-    ctx.fillStyle = tint;
-    ctx.fillRect(x + 4, y, 8, 6); ctx.fillRect(x + 2, y + 6, 12, 3);
-    ctx.fillRect(x + 2, y + 19, 12, 3); ctx.fillRect(x + 4, y + 22, 8, 6);
-    ctx.fillStyle = 'rgba(255,255,255,.35)';
-    ctx.fillRect(x + 7, y + 13, 3, 3);
-    return;
-  }
-  ctx.strokeStyle = '#5d6a7d'; ctx.lineWidth = 2; ctx.lineCap = 'butt';
-  ctx.beginPath(); ctx.moveTo(x - 2, y + 18); ctx.lineTo(x + 8, y + 12); ctx.lineTo(x + 18, y + 18); ctx.stroke();
-  ctx.strokeStyle = tint; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.ellipse(x + 8, y + 14, 5, 8, 0, 0, Math.PI * 2); ctx.stroke();
-}
-
-function drawHome() {
-  ctx.fillStyle = '#0c0f16'; ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = '#111622'; ctx.fillRect(0, Math.round(H * .5), W, Math.round(H * .5));
-
-  const cards = homeCards();
-  textC('PICK A GAME', cx, cards[0].y - 26, 1, '#5d6a7d');
-
-  for (let i = 0; i < cards.length; i++) {
-    const c = cards[i], on = i === homeSel;
-    panel(c.x, c.y, c.w, c.h, on ? c.tint : '#2b3444', on ? 'rgba(20,26,38,.96)' : 'rgba(14,18,27,.9)');
-    homeIcon(c.id, c.x + 9, c.y + 9, c.tint);
-    text(c.name, c.x + 34, c.y + 13, 1, on ? '#fff' : '#93a1b4');
-    text('BEST ' + c.best, c.x + 34, c.y + 26, 1, '#5d6a7d');
-    if (on) { ctx.fillStyle = c.tint; ctx.fillRect(c.x + c.w - 9, c.y + c.h / 2 - 3, 2, 2); ctx.fillRect(c.x + c.w - 7, c.y + c.h / 2 - 1, 2, 2); ctx.fillRect(c.x + c.w - 9, c.y + c.h / 2 + 1, 2, 2); }
-  }
-  if ((t % 1.3) < .82) textC('TAP A GAME', cx, cards[1].y + cards[1].h + 20, 1, '#93a1b4');
-}
-
-/* ----------------------------------------------------------------- input */
-function launch(id) {
-  mode = id;
-  if (id === 'fpv') { resetFpv(); fpvState = 'start'; }
-  else { resetRing(); rState = 'start'; }
-}
-
-function press(pos) {
-  if (mode === 'home') {
-    const cards = homeCards();
-    if (!pos) { launch(cards[homeSel].id); return; }
-    for (let i = 0; i < cards.length; i++) {
-      const c = cards[i];
-      if (pos.x >= c.x && pos.x <= c.x + c.w && pos.y >= c.y && pos.y <= c.y + c.h) { homeSel = i; launch(c.id); return; }
-    }
-    return;
-  }
-  // the way back is offered only when nothing is in flight
-  const idle = mode === 'fpv' ? fpvState !== 'play' : rState !== 'play';
-  if (idle && pos && pos.x < 46 && pos.y < 20) { mode = 'home'; return; }
-  if (mode === 'fpv') { flapFpv(); return; }
-  if (rState === 'dead') { if (t - rDeadAt < .55) return; resetRing(); }
-  rState = 'play'; rHold = true;
-}
-function release() { rHold = false; }
-
-/* ------------------------------------------------------------------ loop */
 function frame(ts) {
   const dt = Math.min(.05, (ts - lastTs) / 1000 || 0);
   lastTs = ts;
-  t += dt;
-  if (mode === 'fpv') { updateFpv(dt); renderFpv(); }
-  else if (mode === 'ring') { updateRing(dt); renderRing(); }
-  else drawHome();
-
-  // the only line that touches the screen: the small frame, blown up
-  sctx.clearRect(0, 0, SW, SH);
-  sctx.drawImage(buf, 0, 0, SW, SH);
+  update(dt);
+  render();
   requestAnimationFrame(frame);
 }
 
 /* ---------------------------------------------------------------- input */
-const KEYS = ['Space', 'ArrowUp', 'Enter'];
-const pointAt = e => ({ x: e.clientX / SW * W, y: e.clientY / SH * H });
-
-cv.addEventListener('pointerdown', e => { e.preventDefault(); press(pointAt(e)); });
-window.addEventListener('pointerup', () => release());
-window.addEventListener('pointercancel', () => release());
-window.addEventListener('blur', () => release());
+cv.addEventListener('pointerdown', e => { e.preventDefault(); flap(); });
 document.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
 window.addEventListener('keydown', e => {
-  if (e.code === 'Escape') { mode = 'home'; release(); return; }
-  if (mode === 'home' && (e.code === 'ArrowUp' || e.code === 'ArrowDown')) {
-    e.preventDefault(); homeSel = (homeSel + 1) % 2; return;
-  }
-  if (KEYS.indexOf(e.code) >= 0) { e.preventDefault(); if (!e.repeat) press(null); }
+  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'Enter') { e.preventDefault(); flap(); }
 });
-window.addEventListener('keyup', e => { if (KEYS.indexOf(e.code) >= 0) release(); });
 
-resetFpv();
-resetRing();
+reset();
 requestAnimationFrame(ts => { lastTs = ts; requestAnimationFrame(frame); });
 })();
 </script>
