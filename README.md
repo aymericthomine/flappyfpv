@@ -19,12 +19,29 @@ Then go to http://localhost:8000 — it is built for mobile (portrait).
 
 Everything lives in `index.html`: a small 3D engine written on a 2D canvas.
 
-- hand-rolled perspective projection, with camera pitch and roll
+- everything is drawn into a small buffer — about 260 pixels tall — and blown
+  up with hard edges, so the 3d engine produces pixel art rather than smooth
+  polygons; the score and the cards use a 5×7 bitmap font drawn into the same
+  buffer, so every readout sits on the world's pixel grid
+- hand-rolled perspective projection, with camera pitch
 - near-plane polygon clipping (`clipNear`) for the floor and ceiling, which
   pass behind the camera
 - pipes drawn as boxes, back faces culled, painter's algorithm for depth
 - separate distance fog for the corridor (which dissolves into the void) and
-  for the pipes (which stay readable)
+  for the pipes (which stay readable), quantised into six flat bands so depth
+  reads as steps rather than a blur
+
+### Playing fair
+
+Three rules keep a death felt like your own fault:
+
+- the ceiling is a wall you scrape along, not a kill plane — only the floor
+  and the pipes end a run
+- the pipes test a smaller box than they draw, so a hair's breadth reads as a
+  hair's breadth
+- the next gap's opening is outlined faintly, fading in from far away and out
+  again once you are committed: in first person, judging how high the gap sits
+  is the hard part, and guessing is not the game
 
 ### Endless scenery
 

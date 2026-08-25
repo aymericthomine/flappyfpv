@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#7b1fdb">
+<meta name="theme-color" content="#08060f">
 <meta name="description" content="First-person 3D Flappy Bird. Tap to fly.">
 <!-- the game is one file, so a stale cached copy is a stale build: always revalidate -->
 <meta http-equiv="Cache-Control" content="no-cache">
@@ -11,109 +11,53 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%237b1fdb'/><rect x='8' y='4' width='16' height='9' fill='%2356d62e'/><rect x='8' y='19' width='16' height='9' fill='%2356d62e'/></svg>">
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
-  html,body{height:100%;overflow:hidden;background:#2a0752}
+  html,body{height:100%;overflow:hidden;background:#08060f}
   body{
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
     -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;
     touch-action:none;overscroll-behavior:none;
   }
-  #game{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
-
-  /* ---- top score, the only in-game readout ---- */
-  #hud{
-    position:fixed;top:calc(env(safe-area-inset-top) + 22px);left:0;right:0;
-    text-align:center;pointer-events:none;opacity:0;transition:opacity .3s ease;
+  #game{
+    position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;
+    image-rendering:pixelated;image-rendering:crisp-edges;
   }
-  #hud.show{opacity:1}
-  #score{
-    display:inline-block;font-size:clamp(58px,17vw,104px);font-weight:900;line-height:1;
-    letter-spacing:-.045em;color:#fff;
-    text-shadow:0 0 34px rgba(255,255,255,.5),0 0 12px rgba(255,255,255,.35),0 6px 0 rgba(0,0,0,.22);
-    transform-origin:50% 50%;transition:transform .13s cubic-bezier(.2,.9,.3,1.6);
-  }
-  #score.pop{transform:scale(1.18)}
-
-  /* ---- overlays ---- */
-  #ui{
-    position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    pointer-events:none;text-align:center;
-    padding:calc(env(safe-area-inset-top) + 20px) 22px calc(env(safe-area-inset-bottom) + 20px);
-  }
-  .card{
-    position:absolute;opacity:0;transform:translateY(14px) scale(.94);
-    transition:opacity .28s ease,transform .28s cubic-bezier(.2,.9,.3,1.5);
-    padding:36px 40px 40px;border-radius:32px;
-    background:linear-gradient(180deg,rgba(14,2,34,.82),rgba(8,1,22,.9));
-    border:1px solid rgba(255,255,255,.13);
-    box-shadow:0 30px 80px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.1);
-  }
-  .card.show{opacity:1;transform:none}
-  h1{
-    font-size:clamp(40px,13vw,74px);line-height:.88;font-weight:900;letter-spacing:-.045em;color:#fff;
-    text-shadow:0 0 34px rgba(255,255,255,.3),0 6px 0 rgba(0,0,0,.3);
-  }
-  h1 em{display:block;font-style:normal;color:#8bff5a;text-shadow:0 0 34px rgba(140,255,90,.6),0 6px 0 rgba(0,0,0,.3)}
-  .rule{width:52px;height:4px;border-radius:4px;background:#8bff5a;margin:20px auto 0;opacity:.9}
-  .sub{
-    margin-top:20px;font-size:13px;font-weight:800;letter-spacing:.28em;
-    color:rgba(255,255,255,.9);text-transform:uppercase;
-  }
-  .blink{animation:blink 1.3s ease-in-out infinite}
-  @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
-  .scores{margin-top:26px;display:flex;gap:14px;justify-content:center}
-  .scores div{
-    flex:1;min-width:104px;padding:16px 10px 14px;border-radius:18px;
-    background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.09);color:#fff;
-  }
-  .scores b{display:block;font-size:40px;font-weight:900;line-height:1;letter-spacing:-.03em}
-  .scores i{display:block;margin-top:8px;font-style:normal;font-size:10px;letter-spacing:.24em;opacity:.62;text-transform:uppercase}
-  .scores .hi b{color:#8bff5a}
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
-
-<div id="hud"><div id="score">0</div></div>
-
-<div id="ui">
-  <div class="card" id="cardStart">
-    <h1>FLAPPY<em>FPV</em></h1>
-    <div class="rule"></div>
-    <p class="sub blink">Tap to fly</p>
-  </div>
-  <div class="card" id="cardOver">
-    <h1 style="color:#ff5f5f;text-shadow:0 0 34px rgba(255,95,95,.45),0 6px 0 rgba(0,0,0,.3)">GAME<br>OVER</h1>
-    <div class="scores">
-      <div><b id="sFinal">0</b><i>Score</i></div>
-      <div class="hi"><b id="sBest">0</b><i>Best</i></div>
-    </div>
-    <p class="sub blink" style="margin-top:28px">Tap to retry</p>
-  </div>
-</div>
 
 <script>
 (() => {
 "use strict";
 
 /* ---------------------------------------------------------------- setup */
+/* The whole game is drawn into a small buffer and blown up with hard edges:
+   one buffer pixel lands on screen as one square block, so the 3d engine
+   produces pixel art rather than smooth polygons. Everything below — the
+   projection, the hud, the cards — works in buffer pixels. */
 const cv = document.getElementById('game');
-const ctx = cv.getContext('2d');
-const hud = document.getElementById('hud');
-const elScore = document.getElementById('score');
-const cardStart = document.getElementById('cardStart');
-const cardOver = document.getElementById('cardOver');
-const sFinal = document.getElementById('sFinal');
-const sBest = document.getElementById('sBest');
+const sctx = cv.getContext('2d');
+const buf = document.createElement('canvas');
+const ctx = buf.getContext('2d');
 
-let W = 0, H = 0, cx = 0, cy = 0, focal = 0;
+let W = 0, H = 0, cx = 0, cy = 0, focal = 0;   // the buffer
+let SW = 0, SH = 0;                            // the screen, in css pixels
 const FOV = 68 * Math.PI / 180;
+const PIXEL = 260;                   // wanted buffer height, in game pixels
 
 function resize() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
-  W = window.innerWidth; H = window.innerHeight;
-  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
-  cv.style.width = W + 'px'; cv.style.height = H + 'px';
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  SW = window.innerWidth; SH = window.innerHeight;
+  cv.width = Math.round(SW * dpr); cv.height = Math.round(SH * dpr);
+  cv.style.width = SW + 'px'; cv.style.height = SH + 'px';
+  sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  sctx.imageSmoothingEnabled = false;
+
+  const pix = Math.max(2, Math.min(6, Math.round(SH / PIXEL)));
+  W = Math.max(96, Math.round(SW / pix));
+  H = Math.max(140, Math.round(SH / pix));
+  buf.width = W; buf.height = H;
+  ctx.imageSmoothingEnabled = false;
   cx = W / 2; cy = H / 2;
   focal = (H / 2) / Math.tan(FOV / 2);
 }
@@ -128,7 +72,9 @@ const CAP_H = 0.75, CAP_OUT = 0.42;  // pipe lip
 const GAP = 4.6;
 const SPACING = 13;
 const SPAWN_Z = 78;
-const RADIUS = 0.32;
+const RADIUS = 0.32;                 // how close you sit to floor and ceiling
+const HIT = 0.20;                    // and the smaller box the pipes test against,
+                                     // so a hair's breadth reads as a hair's breadth
 const GRAVITY = -18, FLAP = 6.6, MAX_FALL = -14;
 const BASE_SPEED = 7.6;              // pipes per second ≈ BASE_SPEED / SPACING
 
@@ -136,7 +82,7 @@ const cam = { x: 0, y: 0, z: 0, vy: 0, pitch: 0 };
 let pipes = [], stars = [], towers = [];
 let speed = BASE_SPEED, score = 0, best = 0, shake = 0;
 let state = 'start';
-let t = 0, lastTs = 0, deadAt = -9, shownScore = -1;
+let t = 0, lastTs = 0, deadAt = -9, poppedAt = -9;
 
 try { best = parseInt(localStorage.getItem('flappyFpvBest') || '0', 10) || 0; } catch (e) { best = 0; }
 
@@ -331,7 +277,7 @@ function reset() {
   pipes = []; score = 0; speed = BASE_SPEED; shake = 0; lastGapY = 0;
   for (let i = 0; i < 6; i++) addPipe(30 + i * SPACING);
   snapZone(); makeStars(); makeTowers();
-  shownScore = -1;
+  poppedAt = -9;
 }
 
 /* ------------------------------------------------------------ 3d helpers */
@@ -378,9 +324,11 @@ const TOWER_FOG = [0.92, 10, 70];
 
 /* fog lets the corridor dissolve into the void while the pipes, which need
    to stay readable, keep their colour much longer. */
+const FOG_STEPS = 6;                   // depth reads as flat bands, not a blur
 function shade(rgb, mul, z, fog) {
   const fs = fog ? fog[1] : fogStart, fe = fog ? fog[2] : fogEnd;
-  const f = Math.max(0, Math.min(1, (z - fs) / (fe - fs))) * (fog ? fog[0] : 0.3);
+  const raw = Math.max(0, Math.min(1, (z - fs) / (fe - fs))) * (fog ? fog[0] : 0.3);
+  const f = Math.round(raw * FOG_STEPS) / FOG_STEPS;
   const v = P.void;
   const r = rgb[0] * mul * (1 - f) + v[0] * f;
   const g = rgb[1] * mul * (1 - f) + v[1] * f;
@@ -435,13 +383,20 @@ function drawPipe(p) {
 }
 
 /* -------------------------------------------------------------- scenery */
+/* Flat bands rather than a gradient: a smooth ramp is the one thing that
+   gives away that the pixels are fake. */
+const SKY_BANDS = 12;
 function drawSky() {
-  const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, css(P.sky[0]));
-  g.addColorStop(.5, css(P.sky[1]));
-  g.addColorStop(1, css(P.sky[2]));
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
+  for (let i = 0; i < SKY_BANDS; i++) {
+    const u = i / (SKY_BANDS - 1);
+    const a = u < .5 ? P.sky[0] : P.sky[1], b = u < .5 ? P.sky[1] : P.sky[2];
+    const k = u < .5 ? u * 2 : (u - .5) * 2;
+    ctx.fillStyle = 'rgb(' + ((a[0] + (b[0] - a[0]) * k) | 0) + ',' +
+                             ((a[1] + (b[1] - a[1]) * k) | 0) + ',' +
+                             ((a[2] + (b[2] - a[2]) * k) | 0) + ')';
+    const y0 = Math.floor(H * i / SKY_BANDS), y1 = Math.floor(H * (i + 1) / SKY_BANDS);
+    ctx.fillRect(0, y0, W, y1 - y0);
+  }
 }
 
 /* Slabs are drawn as depth strips so the fog is computed per-distance
@@ -536,6 +491,132 @@ function drawStars() {
   }
 }
 
+/* In first person the hard part is reading how high the next gap sits.
+   Outline its opening, faintly, and only once it is close enough to matter. */
+function drawGuide() {
+  if (state !== 'play') return;
+  let next = null;
+  for (const p of pipes) if (p.z > cam.z && (!next || p.z < next.z)) next = p;
+  if (!next) return;
+  const d = next.z - cam.z;
+  if (d > 32 || d < 3) return;
+  // it fades in from far away and out again once you are committed, so it
+  // helps you aim and never draws over the gap you are flying through
+  const a = .45 * Math.min(1, (32 - d) / 12) * Math.min(1, (d - 3) / 5);
+  if (a < .02) return;
+  const z = next.z - PIPE_D / 2 - CAP_OUT;
+  const x0 = -PIPE_W / 2 - CAP_OUT, x1 = PIPE_W / 2 + CAP_OUT;
+  const y0 = next.gapY - GAP / 2, y1 = next.gapY + GAP / 2;
+  if (!path([toCam(x0, y0, z), toCam(x1, y0, z), toCam(x1, y1, z), toCam(x0, y1, z)])) return;
+  ctx.strokeStyle = 'rgba(255,255,255,' + a.toFixed(3) + ')';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+/* -------------------------------------------------------------- pixel ui
+   A 5x7 bitmap font drawn into the buffer like everything else, so every
+   readout sits on the same pixel grid as the world. Each glyph is 7 rows of
+   5 cells, written end to end. */
+const FONT = {
+  '0': '.###.#...##...##...##...##...#.###.',
+  '1': '..#...##....#....#....#....#...###.',
+  '2': '.###.#...#....#...#...#...#...#####',
+  '3': '#####...#...#.....#.....##...#.###.',
+  '4': '...#...##..#.#.#..#.#####...#....#.',
+  '5': '######....####.....#....##...#.###.',
+  '6': '..##..#...#....####.#...##...#.###.',
+  '7': '#####....#...#...#...#....#....#...',
+  '8': '.###.#...##...#.###.#...##...#.###.',
+  '9': '.###.#...##...#.####....#...#..##..',
+  'A': '.###.#...##...#######...##...##...#',
+  'B': '####.#...##...#####.#...##...#####.',
+  'C': '.###.#...##....#....#....#...#.###.',
+  'D': '###..#..#.#...##...##...##..#.###..',
+  'E': '######....#....####.#....#....#####',
+  'F': '######....#....####.#....#....#....',
+  'G': '.###.#...##....#.####...##...#.###.',
+  'H': '#...##...##...#######...##...##...#',
+  'I': '.###...#....#....#....#....#...###.',
+  'J': '..###...#....#....#....#.#..#..##..',
+  'K': '#...##..#.#.#..##...#.#..#..#.#...#',
+  'L': '#....#....#....#....#....#....#####',
+  'M': '#...###.###.#.##.#.##...##...##...#',
+  'N': '#...###..##.#.##..###...##...##...#',
+  'O': '.###.#...##...##...##...##...#.###.',
+  'P': '####.#...##...#####.#....#....#....',
+  'Q': '.###.#...##...##...##.#.##..#..##.#',
+  'R': '####.#...##...#####.#.#..#..#.#...#',
+  'S': '.#####....#.....###.....#....#####.',
+  'T': '#####..#....#....#....#....#....#..',
+  'U': '#...##...##...##...##...##...#.###.',
+  'V': '#...##...##...##...##...#.#.#...#..',
+  'W': '#...##...##...##.#.##.#.###.###...#',
+  'X': '#...##...#.#.#...#...#.#.#...##...#',
+  'Y': '#...##...#.#.#...#....#....#....#..',
+  'Z': '#####....#...#...#...#...#....#####',
+  '!': '..#....#....#....#....#.........#..',
+  '.': '................................#..',
+  ' ': '...................................',
+};
+
+function text(str, x, y, s, col) {
+  ctx.fillStyle = col;
+  let px = x;
+  for (const ch of str) {
+    const g = FONT[ch];
+    if (g) {
+      for (let r = 0; r < 7; r++) {
+        for (let c = 0; c < 5; c++) if (g[r * 5 + c] === '#') ctx.fillRect(px + c * s, y + r * s, s, s);
+      }
+    }
+    px += 6 * s;
+  }
+}
+function textW(str, s) { return str.length * 6 * s - s; }
+function textC(str, xc, y, s, col, outline) {
+  const x = Math.round(xc - textW(str, s) / 2);
+  if (outline) {                       // one pixel of black, never a halo
+    text(str, x - 1, y, s, outline); text(str, x + 1, y, s, outline);
+    text(str, x, y - 1, s, outline); text(str, x, y + 1, s, outline);
+  }
+  text(str, x, y, s, col);
+}
+function panel(x, y, w, h) {
+  ctx.fillStyle = 'rgba(6,6,14,.88)';
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = css(P.lip);
+  ctx.fillRect(x, y, w, 1); ctx.fillRect(x, y + h - 1, w, 1);
+  ctx.fillRect(x, y, 1, h); ctx.fillRect(x + w - 1, y, 1, h);
+}
+
+function drawUI() {
+  const blink = (t % 1.3) < .82;
+  if (state === 'play') {
+    const s = t - poppedAt < .13 ? 5 : 4;          // the score jumps on a point
+    textC(String(score), cx, Math.round(H * .07), s, '#fff', '#000');
+    return;
+  }
+  if (state === 'start') {
+    const w = Math.min(W - 10, 118), x = Math.round(cx - w / 2), y = Math.round(cy - 41);
+    panel(x, y, w, 82);
+    textC('FLAPPY', cx, y + 12, 2, '#fff');
+    textC('FPV', cx, y + 30, 4, css(P.lip));
+    if (blink) textC('TAP TO FLY', cx, y + 66, 1, '#fff');
+    return;
+  }
+  const w = Math.min(W - 10, 122), x = Math.round(cx - w / 2), y = Math.round(cy - 50);
+  panel(x, y, w, 100);
+  textC('GAME', cx, y + 9, 2, '#ff5f5f');
+  textC('OVER', cx, y + 27, 2, '#ff5f5f');
+  ctx.fillStyle = css(P.lip);
+  ctx.fillRect(x + 10, y + 46, w - 20, 1);
+  textC('SCORE', x + w * .28, y + 54, 1, '#8fa0b4');
+  textC(String(score), x + w * .28, y + 64, 2, '#fff');
+  textC('BEST', x + w * .72, y + 54, 1, '#8fa0b4');
+  textC(String(best), x + w * .72, y + 64, 2, css(P.lip));
+  if (t - deadAt > .55 && blink) textC('TAP TO RETRY', cx, y + 86, 1, '#fff');
+}
+
 /* ----------------------------------------------------------------- audio */
 let ac = null;
 function beep(freq, dur, type, vol) {
@@ -555,20 +636,14 @@ function beep(freq, dur, type, vol) {
 
 /* ------------------------------------------------------------------ loop */
 function flap() {
-  if (state === 'start') {
-    state = 'play';
-    cardStart.classList.remove('show');
-    hud.classList.add('show');
-  }
   if (state === 'dead') {
     if (t - deadAt < .55) return;   // ignore the tap that killed you
     reset();
     state = 'play';
-    cardOver.classList.remove('show');
-    hud.classList.add('show');
     return;
   }
-  cam.vy = FLAP;
+  state = 'play';                   // the tap that starts the run also flaps,
+  cam.vy = FLAP;                    // so a run never opens on a free fall
   beep(520, .09, 'square', .045);
 }
 
@@ -579,10 +654,6 @@ function die() {
     best = score;
     try { localStorage.setItem('flappyFpvBest', String(best)); } catch (e) { /* ignore */ }
   }
-  sFinal.textContent = score;
-  sBest.textContent = best;
-  hud.classList.remove('show');
-  cardOver.classList.add('show');
 }
 
 function update(dt) {
@@ -598,17 +669,18 @@ function update(dt) {
     cam.y += cam.vy * dt;
     cam.z += speed * dt;
 
-    if (cam.y - RADIUS < FLOOR || cam.y + RADIUS > CEIL) {
-      cam.y = Math.max(FLOOR + RADIUS, Math.min(CEIL - RADIUS, cam.y));
-      die();
-    }
+    // the ceiling is a wall you scrape along, not a trap: only the floor
+    // and the pipes end a run
+    if (cam.y + RADIUS > CEIL) { cam.y = CEIL - RADIUS; if (cam.vy > 0) cam.vy = 0; }
+    if (cam.y - RADIUS < FLOOR) { cam.y = FLOOR + RADIUS; die(); }
+
     for (const p of pipes) {
-      const half = PIPE_D / 2 + CAP_OUT + RADIUS;
+      const half = PIPE_D / 2 + CAP_OUT + HIT;
       if (Math.abs(p.z - cam.z) < half) {
-        if (cam.y - RADIUS < p.gapY - GAP / 2 || cam.y + RADIUS > p.gapY + GAP / 2) { die(); break; }
+        if (cam.y - HIT < p.gapY - GAP / 2 || cam.y + HIT > p.gapY + GAP / 2) { die(); break; }
       }
       if (!p.scored && p.z < cam.z) {
-        p.scored = true; score++;
+        p.scored = true; score++; poppedAt = t;
         beep(880, .08, 'triangle', .05);
       }
     }
@@ -637,18 +709,9 @@ function update(dt) {
   for (const w of towers) if (w.z < cam.z - 6) seedTower(w, cam.z + SPAWN_Z + Math.random() * 20);
 }
 
-function syncHud() {
-  if (score !== shownScore) {
-    shownScore = score;
-    elScore.textContent = score;
-    elScore.classList.add('pop');
-    setTimeout(() => elScore.classList.remove('pop'), 130);
-  }
-}
-
 function render() {
   ctx.save();
-  if (shake > 0) ctx.translate(0, (Math.random() - .5) * 16 * shake);   // vertical only
+  if (shake > 0) ctx.translate(0, Math.round((Math.random() - .5) * 5 * shake));   // vertical, whole pixels
 
   drawSky();
   drawTowers();
@@ -659,6 +722,7 @@ function render() {
 
   const sorted = pipes.slice().sort((a, b) => b.z - a.z);
   for (const p of sorted) drawPipe(p);
+  drawGuide();
 
   const v = ctx.createRadialGradient(cx, cy, H * .3, cx, cy, H * .78);
   v.addColorStop(0, 'rgba(0,0,0,0)');
@@ -675,7 +739,11 @@ function render() {
     ctx.fillRect(0, 0, W, H);
   }
 
-  syncHud();
+  drawUI();
+
+  // and now the only line that touches the screen: the small frame, blown up
+  sctx.clearRect(0, 0, SW, SH);
+  sctx.drawImage(buf, 0, 0, SW, SH);
 }
 
 function frame(ts) {
@@ -694,8 +762,6 @@ window.addEventListener('keydown', e => {
 });
 
 reset();
-sBest.textContent = best;
-cardStart.classList.add('show');
 requestAnimationFrame(ts => { lastTs = ts; requestAnimationFrame(frame); });
 })();
 </script>
