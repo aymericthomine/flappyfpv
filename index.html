@@ -30,12 +30,6 @@
     transform-origin:50% 50%;transition:transform .13s cubic-bezier(.2,.9,.3,1.6);
   }
   #score.pop{transform:scale(1.18)}
-  #zone{
-    margin-top:6px;font-size:12px;font-weight:800;letter-spacing:.34em;text-transform:uppercase;
-    color:#fff;opacity:0;transition:opacity .5s ease;
-    text-shadow:0 0 18px rgba(0,0,0,.7),0 2px 10px rgba(0,0,0,.85);
-  }
-  #zone.show{opacity:.95}
 
   /* ---- overlays ---- */
   #ui{
@@ -77,7 +71,7 @@
 <body>
 <canvas id="game"></canvas>
 
-<div id="hud"><div id="score">0</div><div id="zone"></div></div>
+<div id="hud"><div id="score">0</div></div>
 
 <div id="ui">
   <div class="card" id="cardStart">
@@ -104,7 +98,6 @@ const cv = document.getElementById('game');
 const ctx = cv.getContext('2d');
 const hud = document.getElementById('hud');
 const elScore = document.getElementById('score');
-const elZone = document.getElementById('zone');
 const cardStart = document.getElementById('cardStart');
 const cardOver = document.getElementById('cardOver');
 const sFinal = document.getElementById('sFinal');
@@ -141,33 +134,133 @@ const cam = { x: 0, y: 0, z: 0, vy: 0, pitch: 0, roll: 0 };
 let pipes = [], stars = [], towers = [];
 let speed = BASE_SPEED, score = 0, best = 0, shake = 0;
 let state = 'start';
-let t = 0, lastTs = 0, deadAt = -9, shownScore = -1, zoneIdx = -1;
+let t = 0, lastTs = 0, deadAt = -9, shownScore = -1;
 
 try { best = parseInt(localStorage.getItem('flappyFpvBest') || '0', 10) || 0; } catch (e) { best = 0; }
 
 /* ---------------------------------------------------------------- zones
-   The scenery evolves with the score: every ZONE_LEN points the world
-   crosses into the next palette, and the live colours ease toward it. */
-const ZONE_LEN = 8;
-const ZONES = [
-  { name: 'Neon',    sky: [[143, 52, 242], [123, 31, 219], [88, 18, 160]],   void: [123, 31, 219],  floor: [86, 214, 46],   pipe: [86, 214, 46],   lip: [128, 236, 78],  tower: [78, 16, 148] },
-  { name: 'Sunset',  sky: [[255, 158, 92], [242, 92, 112], [126, 38, 116]],  void: [240, 104, 116], floor: [34, 168, 156],  pipe: [40, 196, 178],  lip: [96, 236, 216],  tower: [148, 46, 92] },
-  { name: 'Abyss',   sky: [[36, 86, 176], [16, 44, 118], [6, 16, 58]],       void: [18, 48, 120],   floor: [26, 82, 146],   pipe: [255, 118, 86],  lip: [255, 170, 128], tower: [10, 30, 84] },
-  { name: 'Toxic',   sky: [[74, 106, 42], [38, 62, 28], [12, 24, 14]],       void: [40, 66, 30],    floor: [104, 138, 38],  pipe: [216, 238, 44],  lip: [242, 252, 128], tower: [26, 46, 22] },
-  { name: 'Glacier', sky: [[84, 126, 196], [42, 74, 138], [14, 28, 66]],     void: [46, 80, 144],   floor: [148, 196, 232], pipe: [230, 246, 255], lip: [255, 255, 255], tower: [26, 50, 104] },
-  { name: 'Ember',   sky: [[92, 22, 26], [48, 12, 20], [16, 5, 10]],         void: [52, 14, 20],    floor: [124, 44, 30],   pipe: [255, 92, 52],   lip: [255, 156, 100], tower: [34, 9, 14] }
-];
+   The scenery is generated, never listed: every ZONE_DIST units flown the
+   corridor crosses into a brand-new zone whose palette and skyline style are
+   derived from its index, so the world keeps changing as far as you get and
+   never loops back to a zone you have already seen. */
+const ZONE_DIST = 104;                 // ≈ 8 pipes' worth of corridor
 
-// live palette, eased toward ZONES[zone] every frame
-const P = {
+/* deterministic pseudo-random: same zone index always rebuilds the same zone */
+function rnd(n) {
+  const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return x - Math.floor(x);
+}
+function zoneAt(z) { return Math.max(0, Math.floor(z / ZONE_DIST)); }
+
+/* h, s, l in 0..1 -> [r, g, b] in 0..255 */
+function hsl(h, s, l) {
+  h = ((h % 1) + 1) % 1;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => {
+    const k = (n + h * 12) % 12;
+    return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, Math.min(9 - k, 1)))));
+  };
+  return [f(0), f(8), f(4)];
+}
+
+function luma(c) { return (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255; }
+
+/* Hue alone does not keep the pipes readable — a green and a magenta can be
+   exactly as bright. So the pipe lightness is chosen, not assumed: the value
+   that stands furthest from the brightness of the corridor and of the sky,
+   with a nudge back toward mid-tones so a zone never turns black-on-colour. */
+function pickPipeL(h, s, floorRgb, skyRgb) {
+  const lf = luma(floorRgb), ls = luma(skyRgb);
+  let bestL = .55, bestScore = -9;
+  for (let l = .22; l <= .82; l += .04) {
+    const c = luma(hsl(h, s, l));
+    const score = Math.min(Math.abs(c - lf), Math.abs(c - ls) * .85) - Math.abs(l - .55) * .18;
+    if (score > bestScore) { bestScore = score; bestL = l; }
+  }
+  return bestL;
+}
+
+/* Zone 0 is the game's own colours — the first flight always looks like
+   Flappy FPV. Everything past it is generated. */
+const NEON = {
   sky: [[143, 52, 242], [123, 31, 219], [88, 18, 160]],
   void: [123, 31, 219], floor: [86, 214, 46], pipe: [86, 214, 46],
   lip: [128, 236, 78], tower: [78, 16, 148]
 };
 
+/* One dominant hue for the sky and the void, a companion hue for the
+   corridor, and a hue roughly opposite for the pipes; the pipes are then
+   pushed away from the corridor's brightness so the gaps stay readable
+   however bright or dark the zone came out. */
+function zonePalette(i) {
+  if (i === 0) return { sky: NEON.sky.map(c => c.slice()), void: NEON.void.slice(),
+                        floor: NEON.floor.slice(), pipe: NEON.pipe.slice(),
+                        lip: NEON.lip.slice(), tower: NEON.tower.slice() };
+  const h = (0.11 + i * 0.381966) % 1;                 // golden-angle hue walk
+  const a = rnd(i * 5 + 1), b = rnd(i * 5 + 2);
+  const c = rnd(i * 5 + 3), d = rnd(i * 5 + 4);
+  const dir = rnd(i * 5 + 5) < .5 ? 1 : -1;            // which way round the wheel
+  const sat = 0.40 + a * 0.48;
+  const lum = 0.72 + b * 0.52;                         // overall brightness mood
+  const hFloor = h + dir * (0.26 + c * 0.12);
+  const hPipe  = h + dir * (0.44 + d * 0.14);
+  const cl = v => Math.max(0.04, Math.min(0.92, v));
+  const sky = [
+    hsl(h, sat * .82, cl(.62 * lum)),
+    hsl(h, sat * .94, cl(.40 * lum)),
+    hsl(h + .04, sat, cl(.17 * lum))
+  ];
+  const floor = hsl(hFloor, sat * .80, cl(.46 * lum));
+  const lPipe = pickPipeL(hPipe, .80, floor, sky[1]);
+  return {
+    sky: sky,
+    void:  hsl(h, sat * .90, cl(.34 * lum)),
+    floor: floor,
+    pipe:  hsl(hPipe, .80, lPipe),
+    lip:   hsl(hPipe, .66, Math.min(.90, lPipe + .22)),
+    tower: hsl(h, sat * .85, cl(.13 * lum))
+  };
+}
+
+/* The skyline gets its own recipe per zone: how the silhouettes are built,
+   how far out they stand, how tall they grow. */
+function zoneDeco(i) {
+  const a = rnd(i * 9 + 21), b = rnd(i * 9 + 23);
+  const c = rnd(i * 9 + 25), d = rnd(i * 9 + 27);
+  return {
+    style: Math.floor(a * 4) % 4,      // 0 blocks, 1 spires, 2 mesas, 3 stacks
+    spread: 8 + b * 17,                // how far into the void they stand
+    w: 1.5 + c * 2.6,                  // base footprint
+    wVar: 1 + d * 3.2,
+    h: 4 + d * 9,                      // base height
+    hVar: 6 + a * 24,
+    star: .55 + c * 1.5                // dust: fine grain here, coarse there
+  };
+}
+
+/* zones are rebuilt on demand, and cached so it is one build per crossing */
+let zpI = -1, zpPal = null, zdI = -1, zdDeco = null;
+function paletteAt(z) {
+  const i = zoneAt(z);
+  if (i !== zpI) { zpI = i; zpPal = zonePalette(i); }
+  return zpPal;
+}
+function decoAt(z) {
+  const i = zoneAt(z);
+  if (i !== zdI) { zdI = i; zdDeco = zoneDeco(i); }
+  return zdDeco;
+}
+
+// live palette, eased toward the zone the camera is flying through
+const P = {
+  sky: [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
+  void: [0, 0, 0], floor: [0, 0, 0], pipe: [0, 0, 0],
+  lip: [0, 0, 0], tower: [0, 0, 0]
+};
+
 function easeArr(a, b, k) { for (let i = 0; i < a.length; i++) a[i] += (b[i] - a[i]) * k; }
 function easeZone(dt) {
-  const z = ZONES[Math.floor(score / ZONE_LEN) % ZONES.length];
+  const z = paletteAt(cam.z);
   const k = Math.min(1, dt * 1.6);
   for (let i = 0; i < 3; i++) easeArr(P.sky[i], z.sky[i], k);
   easeArr(P.void, z.void, k);
@@ -177,32 +270,42 @@ function easeZone(dt) {
   easeArr(P.tower, z.tower, k);
 }
 function snapZone() {
-  const z = ZONES[Math.floor(score / ZONE_LEN) % ZONES.length];
+  const z = paletteAt(cam.z);
   for (let i = 0; i < 3; i++) P.sky[i] = z.sky[i].slice();
   P.void = z.void.slice(); P.floor = z.floor.slice(); P.pipe = z.pipe.slice();
   P.lip = z.lip.slice(); P.tower = z.tower.slice();
 }
 
+function seedStar(st, z) {
+  st.x = (Math.random() - .5) * 30;
+  st.y = FLOOR + Math.random() * (CEIL - FLOOR);
+  st.z = z;
+  st.s = (0.05 + Math.random() * 0.09) * decoAt(z).star;
+  return st;
+}
 function makeStars() {
   stars = [];
-  for (let i = 0; i < 90; i++) {
-    stars.push({
-      x: (Math.random() - .5) * 30,
-      y: FLOOR + Math.random() * (CEIL - FLOOR),
-      z: cam.z + Math.random() * SPAWN_Z,
-      s: 0.05 + Math.random() * 0.09
-    });
-  }
+  for (let i = 0; i < 90; i++) stars.push(seedStar({}, cam.z + Math.random() * SPAWN_Z));
 }
 
-/* Silhouettes standing out in the void, past the edge of the corridor. */
+/* Silhouettes standing out in the void, past the edge of the corridor. A
+   tower is built from the recipe of the zone it spawns into — and it spawns
+   SPAWN_Z ahead, so the next skyline rises on the horizon before its colours
+   reach you. */
 function seedTower(tw, z) {
+  const dc = decoAt(z);
   const side = Math.random() < .5 ? -1 : 1;
-  tw.x = side * (12 + Math.random() * 15);
-  tw.w = 2 + Math.random() * 4;
-  tw.d = 2 + Math.random() * 4;
-  tw.h = 5 + Math.random() * 22;
+  tw.x = side * (11 + Math.random() * dc.spread);
+  tw.w = dc.w + Math.random() * dc.wVar;
+  tw.d = dc.w + Math.random() * dc.wVar;
+  tw.h = dc.h + Math.random() * dc.hVar;
+  tw.style = dc.style;
+  tw.tint = .82 + Math.random() * .34;
+  tw.tilt = (Math.random() - .5) * 1.1;
   tw.z = z;
+  // the far-away stand-in: one block with the same overall footprint
+  const lod = [[1, 1], [1, 1.12], [1.8, .74], [1.2, 1], [1, 1]][tw.style];
+  tw.lw = tw.w * lod[0]; tw.ld = tw.d * lod[0]; tw.lh = tw.h * lod[1];
   return tw;
 }
 function makeTowers() {
@@ -225,8 +328,8 @@ function reset() {
   cam.x = 0; cam.y = 0; cam.z = 0; cam.vy = 0; cam.pitch = 0; cam.roll = 0;
   pipes = []; score = 0; speed = BASE_SPEED; shake = 0; lastGapY = 0;
   for (let i = 0; i < 6; i++) addPipe(30 + i * SPACING);
-  makeStars(); makeTowers(); snapZone();
-  zoneIdx = 0; shownScore = -1;
+  snapZone(); makeStars(); makeTowers();
+  shownScore = -1;
 }
 
 /* ------------------------------------------------------------ 3d helpers */
@@ -357,12 +460,41 @@ function drawSlab(y, rgb, mul) {
   }
 }
 
+const BASE_Y = FLOOR - 9;               // the skyline stands below the corridor
+
+const TOWER_LOD = 46;                   // past this, a silhouette is one block
+
+function drawTower(w) {
+  const c = [P.tower[0] * w.tint, P.tower[1] * w.tint, P.tower[2] * w.tint];
+  const blk = (x, y0, y1, bw, bd) =>
+    box(x - bw / 2, x + bw / 2, y0, y1, w.z - bd / 2, w.z + bd / 2, c, TOWER_FOG, false);
+
+  if (w.z - cam.z > TOWER_LOD) {        // too far and too fogged for detail
+    blk(w.x, BASE_Y, BASE_Y + w.lh, w.lw, w.ld);
+  } else if (w.style === 1) {                  // spire: shaft, narrower crown, needle
+    blk(w.x, BASE_Y, BASE_Y + w.h * .58, w.w, w.d);
+    blk(w.x, BASE_Y + w.h * .58, BASE_Y + w.h, w.w * .56, w.d * .56);
+    blk(w.x, BASE_Y + w.h, BASE_Y + w.h * 1.3, w.w * .16, w.d * .16);
+  } else if (w.style === 2) {           // mesa: broad slab under a small cap
+    blk(w.x, BASE_Y, BASE_Y + w.h * .6, w.w * 1.8, w.d * 1.8);
+    blk(w.x, BASE_Y + w.h * .6, BASE_Y + w.h * .76, w.w * .7, w.d * .7);
+  } else if (w.style === 3) {           // stack: blocks shrinking and leaning
+    let y = BASE_Y, bw = w.w * 1.3, bd = w.d * 1.3, x = w.x;
+    for (let k = 0; k < 3; k++) {
+      const hh = w.h * (.44 - k * .09);
+      blk(x, y, y + hh, bw, bd);
+      y += hh; bw *= .72; bd *= .72; x += w.tilt * bw * .5;
+    }
+  } else {                              // plain block
+    blk(w.x, BASE_Y, BASE_Y + w.h, w.w, w.d);
+  }
+}
+
 function drawTowers() {
   const sorted = towers.slice().sort((a, b) => b.z - a.z);
   for (const w of sorted) {
     if (w.z - cam.z < NEAR) continue;
-    box(w.x - w.w / 2, w.x + w.w / 2, FLOOR - 9, FLOOR - 9 + w.h,
-        w.z - w.d / 2, w.z + w.d / 2, P.tower, TOWER_FOG, false);
+    drawTower(w);
   }
 }
 
@@ -392,13 +524,16 @@ function drawGrid() {
 }
 
 function drawStars() {
+  // barely tinted by the zone, so even the star field belongs to the palette
+  const sr = (510 + P.lip[0]) / 3 | 0, sg = (510 + P.lip[1]) / 3 | 0, sb = (510 + P.lip[2]) / 3 | 0;
+  const tint = sr + ',' + sg + ',' + sb + ',';
   for (const s of stars) {
     const c = toCam(s.x, s.y, s.z);
     if (c.z < 5) continue;
     const sx = cx + focal * c.x / c.z, sy = cy - focal * c.y / c.z;
     const sz = Math.min(7, Math.max(1, focal * s.s / c.z));
     const fade = Math.min(1, (c.z - 5) / 6) * (1 - c.z / (SPAWN_Z + 20));
-    ctx.fillStyle = 'rgba(255,255,255,' + Math.max(0, 0.7 * fade).toFixed(3) + ')';
+    ctx.fillStyle = 'rgba(' + tint + Math.max(0, 0.7 * fade).toFixed(3) + ')';
     ctx.fillRect(sx - sz / 2, sy - sz / 2, sz, sz);
   }
 }
@@ -450,7 +585,6 @@ function die() {
   sFinal.textContent = score;
   sBest.textContent = best;
   hud.classList.remove('show');
-  elZone.classList.remove('show');
   cardOver.classList.add('show');
 }
 
@@ -502,11 +636,7 @@ function update(dt) {
   while (far < cam.z + SPAWN_Z) { far += SPACING; addPipe(far); }
 
   for (const s of stars) {
-    if (s.z < cam.z - 3) {
-      s.z = cam.z + SPAWN_Z + Math.random() * 12;
-      s.x = (Math.random() - .5) * 30;
-      s.y = FLOOR + Math.random() * (CEIL - FLOOR);
-    }
+    if (s.z < cam.z - 3) seedStar(s, cam.z + SPAWN_Z + Math.random() * 12);
   }
   for (const w of towers) if (w.z < cam.z - 6) seedTower(w, cam.z + SPAWN_Z + Math.random() * 20);
 }
@@ -517,14 +647,6 @@ function syncHud() {
     elScore.textContent = score;
     elScore.classList.add('pop');
     setTimeout(() => elScore.classList.remove('pop'), 130);
-
-    const zi = Math.floor(score / ZONE_LEN) % ZONES.length;
-    if (zi !== zoneIdx) {
-      zoneIdx = zi;
-      elZone.textContent = ZONES[zi].name;
-      elZone.classList.add('show');
-      setTimeout(() => elZone.classList.remove('show'), 2600);
-    }
   }
 }
 

@@ -26,10 +26,24 @@ Everything lives in `index.html`: a small 3D engine written on a 2D canvas.
 - separate distance fog for the corridor (which dissolves into the void) and
   for the pipes (which stay readable)
 
-### Evolving scenery
+### Endless scenery
 
-Every 8 points the world crosses into the next zone — Neon, Sunset, Abyss,
-Toxic, Glacier, Ember — and cycles. Each zone carries its own sky gradient,
-void, floor, pipe and skyline colours. The live palette eases toward the
-target zone every frame, so the world shifts continuously rather than
-snapping, and the zone name flashes under the score as you enter it.
+There is no list of zones. Every 104 units flown — about eight pipes — the
+corridor crosses into a new zone, and that zone is *generated* from its index:
+a golden-angle hue walk picks the dominant colour, deterministic noise picks
+the mood, and the skyline gets one of four ways of building itself (blocks,
+spires, mesas, leaning stacks) along with its own spread, height and dust
+grain. The world therefore keeps changing for as long as you keep flying, and
+never loops back to a zone you have already seen.
+
+Zone 0 is the one exception: it is the game's own neon palette, so the first
+flight always looks like Flappy FPV.
+
+Two details keep it playable rather than merely colourful:
+
+- pipe lightness is chosen, not assumed — the value whose luminance stands
+  furthest from the corridor and the sky, so the gaps stay readable whatever
+  the zone came out as
+- the live palette eases toward the zone the camera is in, so crossing a
+  border is a fade rather than a cut, and towers spawn `SPAWN_Z` ahead, so
+  the next skyline rises on the horizon before its colours reach you
