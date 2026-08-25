@@ -1,27 +1,35 @@
 # Flappy FPV
 
-Flappy Bird en 3D, à la première personne. Une seule page, aucune dépendance.
+First-person 3D Flappy Bird. One page, no dependencies.
 
-Tape (ou espace) pour battre des ailes et passer entre les tuyaux.
-Le meilleur score est gardé en local dans le navigateur.
+Tap (or press space) to flap and fly through the gaps. The best score is kept
+locally in the browser.
 
-## Lancer
+## Run it
 
-Ouvre `index.html` dans un navigateur, ou sers le dossier :
+Open `index.html` in a browser, or serve the folder:
 
 ```
 python3 -m http.server 8000
 ```
 
-Puis va sur http://localhost:8000 — c'est prévu pour le format mobile (portrait).
+Then go to http://localhost:8000 — it is built for mobile (portrait).
 
-## Comment ça marche
+## How it works
 
-Tout tient dans `index.html` : un mini moteur 3D écrit sur un canvas 2D.
+Everything lives in `index.html`: a small 3D engine written on a 2D canvas.
 
-- projection perspective maison, avec tangage et roulis de la caméra
-- découpage des polygones sur le plan proche (`clipNear`), pour le sol et le plafond
-  qui passent derrière la caméra
-- tuyaux dessinés comme des boîtes, faces arrière éliminées, algorithme du peintre
-- brouillard de distance séparé pour le couloir (qui se fond dans le violet)
-  et pour les tuyaux (qui restent lisibles)
+- hand-rolled perspective projection, with camera pitch and roll
+- near-plane polygon clipping (`clipNear`) for the floor and ceiling, which
+  pass behind the camera
+- pipes drawn as boxes, back faces culled, painter's algorithm for depth
+- separate distance fog for the corridor (which dissolves into the void) and
+  for the pipes (which stay readable)
+
+### Evolving scenery
+
+Every 8 points the world crosses into the next zone — Neon, Sunset, Abyss,
+Toxic, Glacier, Ember — and cycles. Each zone carries its own sky gradient,
+void, floor, pipe and skyline colours. The live palette eases toward the
+target zone every frame, so the world shifts continuously rather than
+snapping, and the zone name flashes under the score as you enter it.

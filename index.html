@@ -1,61 +1,97 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#7b1fdb">
-<meta name="description" content="Flappy Bird en 3D, vue première personne. Tape pour voler.">
+<meta name="description" content="First-person 3D Flappy Bird. Tap to fly.">
 <title>Flappy FPV</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%237b1fdb'/><rect x='8' y='4' width='16' height='9' fill='%2356d62e'/><rect x='8' y='19' width='16' height='9' fill='%2356d62e'/></svg>">
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
-  html,body{height:100%;overflow:hidden;background:#3d0a70}
+  html,body{height:100%;overflow:hidden;background:#2a0752}
   body{
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
     -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;
     touch-action:none;overscroll-behavior:none;
   }
   #game{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
-  #ui{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-      pointer-events:none;text-align:center;padding:env(safe-area-inset-top) 24px env(safe-area-inset-bottom)}
+
+  /* ---- top score, the only in-game readout ---- */
+  #hud{
+    position:fixed;top:calc(env(safe-area-inset-top) + 22px);left:0;right:0;
+    text-align:center;pointer-events:none;opacity:0;transition:opacity .3s ease;
+  }
+  #hud.show{opacity:1}
+  #score{
+    display:inline-block;font-size:clamp(58px,17vw,104px);font-weight:900;line-height:1;
+    letter-spacing:-.045em;color:#fff;
+    text-shadow:0 0 34px rgba(255,255,255,.5),0 0 12px rgba(255,255,255,.35),0 6px 0 rgba(0,0,0,.22);
+    transform-origin:50% 50%;transition:transform .13s cubic-bezier(.2,.9,.3,1.6);
+  }
+  #score.pop{transform:scale(1.18)}
+  #zone{
+    margin-top:6px;font-size:12px;font-weight:800;letter-spacing:.34em;text-transform:uppercase;
+    color:#fff;opacity:0;transition:opacity .5s ease;
+    text-shadow:0 0 18px rgba(0,0,0,.7),0 2px 10px rgba(0,0,0,.85);
+  }
+  #zone.show{opacity:.95}
+
+  /* ---- overlays ---- */
+  #ui{
+    position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    pointer-events:none;text-align:center;
+    padding:calc(env(safe-area-inset-top) + 20px) 22px calc(env(safe-area-inset-bottom) + 20px);
+  }
   .card{
-    pointer-events:none;opacity:0;transform:translateY(10px) scale(.96);
-    transition:opacity .25s ease,transform .25s cubic-bezier(.2,.9,.3,1.4);
-    padding:30px 34px 34px;border-radius:28px;
-    background:rgba(18,0,42,.74);box-shadow:0 20px 60px rgba(0,0,0,.35);
+    position:absolute;opacity:0;transform:translateY(14px) scale(.94);
+    transition:opacity .28s ease,transform .28s cubic-bezier(.2,.9,.3,1.5);
+    padding:36px 40px 40px;border-radius:32px;
+    background:linear-gradient(180deg,rgba(14,2,34,.82),rgba(8,1,22,.9));
+    border:1px solid rgba(255,255,255,.13);
+    box-shadow:0 30px 80px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.1);
   }
   .card.show{opacity:1;transform:none}
   h1{
-    font-size:clamp(34px,11vw,64px);line-height:.92;font-weight:900;letter-spacing:-.03em;color:#fff;
-    text-shadow:0 0 24px rgba(120,255,90,.55),0 6px 0 rgba(0,0,0,.35);
+    font-size:clamp(40px,13vw,74px);line-height:.88;font-weight:900;letter-spacing:-.045em;color:#fff;
+    text-shadow:0 0 34px rgba(255,255,255,.3),0 6px 0 rgba(0,0,0,.3);
   }
-  h1 span{display:block;color:#8bff5a}
-  .sub{margin-top:14px;font-size:15px;font-weight:700;letter-spacing:.22em;color:rgba(255,255,255,.85);text-transform:uppercase}
-  .blink{animation:blink 1.1s infinite}
-  @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
-  .scores{margin-top:22px;display:flex;gap:34px;justify-content:center}
-  .scores div{color:#fff}
-  .scores b{display:block;font-size:44px;font-weight:900;line-height:1;text-shadow:0 4px 0 rgba(0,0,0,.3)}
-  .scores i{display:block;margin-top:6px;font-style:normal;font-size:11px;letter-spacing:.2em;opacity:.7;text-transform:uppercase}
-  #hud{position:fixed;top:calc(env(safe-area-inset-top) + 14px);left:0;right:0;text-align:center;
-       color:#fff;font-size:13px;font-weight:800;letter-spacing:.22em;opacity:.55;pointer-events:none}
+  h1 em{display:block;font-style:normal;color:#8bff5a;text-shadow:0 0 34px rgba(140,255,90,.6),0 6px 0 rgba(0,0,0,.3)}
+  .rule{width:52px;height:4px;border-radius:4px;background:#8bff5a;margin:20px auto 0;opacity:.9}
+  .sub{
+    margin-top:20px;font-size:13px;font-weight:800;letter-spacing:.28em;
+    color:rgba(255,255,255,.9);text-transform:uppercase;
+  }
+  .blink{animation:blink 1.3s ease-in-out infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+  .scores{margin-top:26px;display:flex;gap:14px;justify-content:center}
+  .scores div{
+    flex:1;min-width:104px;padding:16px 10px 14px;border-radius:18px;
+    background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.09);color:#fff;
+  }
+  .scores b{display:block;font-size:40px;font-weight:900;line-height:1;letter-spacing:-.03em}
+  .scores i{display:block;margin-top:8px;font-style:normal;font-size:10px;letter-spacing:.24em;opacity:.62;text-transform:uppercase}
+  .scores .hi b{color:#8bff5a}
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
-<div id="hud"></div>
+
+<div id="hud"><div id="score">0</div><div id="zone"></div></div>
+
 <div id="ui">
   <div class="card" id="cardStart">
-    <h1>FLAPPY<span>FPV</span></h1>
-    <p class="sub blink">Tape pour voler</p>
+    <h1>FLAPPY<em>FPV</em></h1>
+    <div class="rule"></div>
+    <p class="sub blink">Tap to fly</p>
   </div>
   <div class="card" id="cardOver">
-    <h1 style="color:#ff5a5a;text-shadow:0 0 24px rgba(255,90,90,.5),0 6px 0 rgba(0,0,0,.35)">PERDU</h1>
+    <h1 style="color:#ff5f5f;text-shadow:0 0 34px rgba(255,95,95,.45),0 6px 0 rgba(0,0,0,.3)">GAME<br>OVER</h1>
     <div class="scores">
       <div><b id="sFinal">0</b><i>Score</i></div>
-      <div><b id="sBest">0</b><i>Record</i></div>
+      <div class="hi"><b id="sBest">0</b><i>Best</i></div>
     </div>
-    <p class="sub blink" style="margin-top:26px">Tape pour rejouer</p>
+    <p class="sub blink" style="margin-top:28px">Tap to retry</p>
   </div>
 </div>
 
@@ -67,10 +103,12 @@
 const cv = document.getElementById('game');
 const ctx = cv.getContext('2d');
 const hud = document.getElementById('hud');
+const elScore = document.getElementById('score');
+const elZone = document.getElementById('zone');
 const cardStart = document.getElementById('cardStart');
-const cardOver  = document.getElementById('cardOver');
+const cardOver = document.getElementById('cardOver');
 const sFinal = document.getElementById('sFinal');
-const sBest  = document.getElementById('sBest');
+const sBest = document.getElementById('sBest');
 
 let W = 0, H = 0, cx = 0, cy = 0, focal = 0;
 const FOV = 68 * Math.PI / 180;
@@ -88,22 +126,62 @@ window.addEventListener('resize', resize);
 resize();
 
 /* ---------------------------------------------------------------- world */
-const FLOOR = -6, CEIL = 6;          // corridor
-const HALF_W = 9.5;                   // floor / ceiling half width
-const PIPE_W = 2.9, PIPE_D = 2.9;    // pipe body
+const FLOOR = -6, CEIL = 6;          // corridor, also the kill planes
+const HALF_W = 9.5;                  // floor / ceiling half width
+const PIPE_W = 2.9, PIPE_D = 2.9;
 const CAP_H = 0.75, CAP_OUT = 0.42;  // pipe lip
-const GAP = 4.6;                     // vertical gap
-const SPACING = 13;                  // z distance between pipes
-const SPAWN_Z = 78;                  // where pipes appear
-const RADIUS = 0.32;                 // player collision radius
-const GRAVITY = -24, FLAP = 7.6, MAX_FALL = -18;
+const GAP = 4.6;
+const SPACING = 13;
+const SPAWN_Z = 78;
+const RADIUS = 0.32;
+const GRAVITY = -21, FLAP = 7.1, MAX_FALL = -16;
+const BASE_SPEED = 9.5;              // pipes per second ≈ BASE_SPEED / SPACING
 
 const cam = { x: 0, y: 0, z: 0, vy: 0, pitch: 0, roll: 0 };
-let pipes = [], stars = [], speed = 12, score = 0, best = 0, shake = 0;
-let state = 'start';       // start | play | dead
-let t = 0, lastTs = 0;
+let pipes = [], stars = [], towers = [];
+let speed = BASE_SPEED, score = 0, best = 0, shake = 0;
+let state = 'start';
+let t = 0, lastTs = 0, deadAt = -9, shownScore = -1, zoneIdx = -1;
 
 try { best = parseInt(localStorage.getItem('flappyFpvBest') || '0', 10) || 0; } catch (e) { best = 0; }
+
+/* ---------------------------------------------------------------- zones
+   The scenery evolves with the score: every ZONE_LEN points the world
+   crosses into the next palette, and the live colours ease toward it. */
+const ZONE_LEN = 8;
+const ZONES = [
+  { name: 'Neon',    sky: [[143, 52, 242], [123, 31, 219], [88, 18, 160]],   void: [123, 31, 219],  floor: [86, 214, 46],   pipe: [86, 214, 46],   lip: [128, 236, 78],  tower: [78, 16, 148] },
+  { name: 'Sunset',  sky: [[255, 158, 92], [242, 92, 112], [126, 38, 116]],  void: [240, 104, 116], floor: [34, 168, 156],  pipe: [40, 196, 178],  lip: [96, 236, 216],  tower: [148, 46, 92] },
+  { name: 'Abyss',   sky: [[36, 86, 176], [16, 44, 118], [6, 16, 58]],       void: [18, 48, 120],   floor: [26, 82, 146],   pipe: [255, 118, 86],  lip: [255, 170, 128], tower: [10, 30, 84] },
+  { name: 'Toxic',   sky: [[74, 106, 42], [38, 62, 28], [12, 24, 14]],       void: [40, 66, 30],    floor: [104, 138, 38],  pipe: [216, 238, 44],  lip: [242, 252, 128], tower: [26, 46, 22] },
+  { name: 'Glacier', sky: [[84, 126, 196], [42, 74, 138], [14, 28, 66]],     void: [46, 80, 144],   floor: [148, 196, 232], pipe: [230, 246, 255], lip: [255, 255, 255], tower: [26, 50, 104] },
+  { name: 'Ember',   sky: [[92, 22, 26], [48, 12, 20], [16, 5, 10]],         void: [52, 14, 20],    floor: [124, 44, 30],   pipe: [255, 92, 52],   lip: [255, 156, 100], tower: [34, 9, 14] }
+];
+
+// live palette, eased toward ZONES[zone] every frame
+const P = {
+  sky: [[143, 52, 242], [123, 31, 219], [88, 18, 160]],
+  void: [123, 31, 219], floor: [86, 214, 46], pipe: [86, 214, 46],
+  lip: [128, 236, 78], tower: [78, 16, 148]
+};
+
+function easeArr(a, b, k) { for (let i = 0; i < a.length; i++) a[i] += (b[i] - a[i]) * k; }
+function easeZone(dt) {
+  const z = ZONES[Math.floor(score / ZONE_LEN) % ZONES.length];
+  const k = Math.min(1, dt * 1.6);
+  for (let i = 0; i < 3; i++) easeArr(P.sky[i], z.sky[i], k);
+  easeArr(P.void, z.void, k);
+  easeArr(P.floor, z.floor, k);
+  easeArr(P.pipe, z.pipe, k);
+  easeArr(P.lip, z.lip, k);
+  easeArr(P.tower, z.tower, k);
+}
+function snapZone() {
+  const z = ZONES[Math.floor(score / ZONE_LEN) % ZONES.length];
+  for (let i = 0; i < 3; i++) P.sky[i] = z.sky[i].slice();
+  P.void = z.void.slice(); P.floor = z.floor.slice(); P.pipe = z.pipe.slice();
+  P.lip = z.lip.slice(); P.tower = z.tower.slice();
+}
 
 function makeStars() {
   stars = [];
@@ -111,22 +189,30 @@ function makeStars() {
     stars.push({
       x: (Math.random() - .5) * 30,
       y: FLOOR + Math.random() * (CEIL - FLOOR),
-      z: Math.random() * SPAWN_Z,
+      z: cam.z + Math.random() * SPAWN_Z,
       s: 0.05 + Math.random() * 0.09
     });
   }
 }
 
-function reset() {
-  cam.x = 0; cam.y = 0; cam.z = 0; cam.vy = 0; cam.pitch = 0; cam.roll = 0;
-  pipes = []; score = 0; speed = 12; shake = 0; lastGapY = 0;
-  for (let i = 0; i < 6; i++) addPipe(28 + i * SPACING);
-  makeStars();
+/* Silhouettes standing out in the void, past the edge of the corridor. */
+function seedTower(tw, z) {
+  const side = Math.random() < .5 ? -1 : 1;
+  tw.x = side * (12 + Math.random() * 15);
+  tw.w = 2 + Math.random() * 4;
+  tw.d = 2 + Math.random() * 4;
+  tw.h = 5 + Math.random() * 22;
+  tw.z = z;
+  return tw;
+}
+function makeTowers() {
+  towers = [];
+  for (let i = 0; i < 22; i++) towers.push(seedTower({}, cam.z + Math.random() * (SPAWN_Z + 20)));
 }
 
+let lastGapY = 0;
 /* Gaps drift rather than teleport: a new gap stays within reach of the
    previous one, so a run is always physically flyable. */
-let lastGapY = 0;
 function addPipe(z) {
   const span = (CEIL - FLOOR - GAP) / 2 - 0.9;
   let y = lastGapY + (Math.random() * 2 - 1) * 2.2;
@@ -135,14 +221,22 @@ function addPipe(z) {
   pipes.push({ z, gapY: lastGapY, scored: false });
 }
 
+function reset() {
+  cam.x = 0; cam.y = 0; cam.z = 0; cam.vy = 0; cam.pitch = 0; cam.roll = 0;
+  pipes = []; score = 0; speed = BASE_SPEED; shake = 0; lastGapY = 0;
+  for (let i = 0; i < 6; i++) addPipe(30 + i * SPACING);
+  makeStars(); makeTowers(); snapZone();
+  zoneIdx = 0; shownScore = -1;
+}
+
 /* ------------------------------------------------------------ 3d helpers */
 const NEAR = 0.25;
 
 function toCam(x, y, z) {
   const dx = x - cam.x, dy = y - cam.y, dz = z - cam.z;
   const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
-  const zr =  dz * cp + dy * sp;
-  let   yr =  dy * cp - dz * sp;
+  const zr = dz * cp + dy * sp;
+  let   yr = dy * cp - dz * sp;
   const cr = Math.cos(cam.roll), sr = Math.sin(cam.roll);
   const xr = dx * cr - yr * sr;
   yr = dx * sr + yr * cr;
@@ -177,27 +271,27 @@ function path(poly) {
 }
 
 /* --------------------------------------------------------------- colours */
-const BG = [123, 31, 219];
 const fogStart = 24, fogEnd = 72;      // pipes
-const SLAB_FOG = [0.55, 15, 36];       // [strength, start, end] for floor/ceiling
+const SLAB_FOG  = [0.55, 15, 36];      // [strength, start, end] floor / ceiling
+const TOWER_FOG = [0.92, 10, 70];
 
-/* fogMul lets the corridor dissolve into the void while the pipes,
-   which need to stay readable, keep their colour much longer. */
+/* fog lets the corridor dissolve into the void while the pipes, which need
+   to stay readable, keep their colour much longer. */
 function shade(rgb, mul, z, fog) {
   const fs = fog ? fog[1] : fogStart, fe = fog ? fog[2] : fogEnd;
   const f = Math.max(0, Math.min(1, (z - fs) / (fe - fs))) * (fog ? fog[0] : 0.3);
-  const r = rgb[0] * mul * (1 - f) + BG[0] * f;
-  const g = rgb[1] * mul * (1 - f) + BG[1] * f;
-  const b = rgb[2] * mul * (1 - f) + BG[2] * f;
+  const v = P.void;
+  const r = rgb[0] * mul * (1 - f) + v[0] * f;
+  const g = rgb[1] * mul * (1 - f) + v[1] * f;
+  const b = rgb[2] * mul * (1 - f) + v[2] * f;
   return 'rgb(' + (r | 0) + ',' + (g | 0) + ',' + (b | 0) + ')';
 }
+const css = rgb => 'rgb(' + (rgb[0] | 0) + ',' + (rgb[1] | 0) + ',' + (rgb[2] | 0) + ')';
 
-const GREEN = [86, 214, 46];
-const LIME  = [128, 236, 78];
-const FACE  = { front: 1.0, back: .66, left: .74, right: .82, top: 1.22, bottom: .52 };
+const FACE = { front: 1.0, back: .66, left: .74, right: .82, top: 1.22, bottom: .52 };
 
-/* Draw an axis-aligned box, back-face culled. */
-function box(x0, x1, y0, y1, z0, z1, rgb) {
+/* Axis-aligned box, back-face culled. */
+function box(x0, x1, y0, y1, z0, z1, rgb, fog, outline) {
   const V = [
     [x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0],
     [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]
@@ -215,11 +309,14 @@ function box(x0, x1, y0, y1, z0, z1, rgb) {
   for (const f of faces) {
     if (!f.vis) continue;
     if (!path(f.i.map(n => V[n]))) continue;
-    ctx.fillStyle = shade(rgb, FACE[f.k], Math.max(NEAR, f.z - cam.z));
+    const d = Math.max(NEAR, f.z - cam.z);
+    ctx.fillStyle = shade(rgb, FACE[f.k], d, fog);
     ctx.fill();
-    ctx.strokeStyle = shade(rgb, FACE[f.k] * .74, Math.max(NEAR, f.z - cam.z));
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    if (outline !== false) {
+      ctx.strokeStyle = shade(rgb, FACE[f.k] * .72, d, fog);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
   }
 }
 
@@ -230,18 +327,18 @@ function drawPipe(p) {
   const cx0 = x0 - CAP_OUT, cx1 = x1 + CAP_OUT;
   const cz0 = z0 - CAP_OUT, cz1 = z1 + CAP_OUT;
 
-  box(x0, x1, FLOOR, gapB - CAP_H, z0, z1, GREEN);       // bottom body
-  box(x0, x1, gapT + CAP_H, CEIL, z0, z1, GREEN);        // top body
-  box(cx0, cx1, gapB - CAP_H, gapB, cz0, cz1, LIME);     // bottom lip
-  box(cx0, cx1, gapT, gapT + CAP_H, cz0, cz1, LIME);     // top lip
+  box(x0, x1, FLOOR, gapB - CAP_H, z0, z1, P.pipe);      // bottom body
+  box(x0, x1, gapT + CAP_H, CEIL, z0, z1, P.pipe);       // top body
+  box(cx0, cx1, gapB - CAP_H, gapB, cz0, cz1, P.lip);    // bottom lip
+  box(cx0, cx1, gapT, gapT + CAP_H, cz0, cz1, P.lip);    // top lip
 }
 
 /* -------------------------------------------------------------- scenery */
-function drawBackground() {
+function drawSky() {
   const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, '#8b2df0');
-  g.addColorStop(.5, '#7b1fdb');
-  g.addColorStop(1, '#5c14a6');
+  g.addColorStop(0, css(P.sky[0]));
+  g.addColorStop(.5, css(P.sky[1]));
+  g.addColorStop(1, css(P.sky[2]));
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
 }
@@ -257,6 +354,15 @@ function drawSlab(y, rgb, mul) {
                toCam(HALF_W, y, z1), toCam(-HALF_W, y, z1)])) continue;
     ctx.fillStyle = shade(rgb, mul, Math.max(NEAR, (z0 + z1) / 2 - cam.z), SLAB_FOG);
     ctx.fill();
+  }
+}
+
+function drawTowers() {
+  const sorted = towers.slice().sort((a, b) => b.z - a.z);
+  for (const w of sorted) {
+    if (w.z - cam.z < NEAR) continue;
+    box(w.x - w.w / 2, w.x + w.w / 2, FLOOR - 9, FLOOR - 9 + w.h,
+        w.z - w.d / 2, w.z + w.d / 2, P.tower, TOWER_FOG, false);
   }
 }
 
@@ -297,25 +403,6 @@ function drawStars() {
   }
 }
 
-function drawScore3d(z, y) {
-  const c = toCam(0, y, z);
-  if (c.z < 2) return;
-  const sx = cx + focal * c.x / c.z, sy = cy - focal * c.y / c.z;
-  const size = focal * 3.4 / c.z;
-  if (size < 6) return;
-  const a = Math.max(0, Math.min(1, 1 - (c.z - 14) / 46));
-  ctx.save();
-  ctx.globalAlpha = a;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = '900 ' + size.toFixed(1) + 'px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
-  ctx.shadowColor = 'rgba(140,255,90,.9)';
-  ctx.shadowBlur = size * .35;
-  ctx.fillStyle = '#fff';
-  ctx.fillText(String(score), sx, sy);
-  ctx.restore();
-}
-
 /* ----------------------------------------------------------------- audio */
 let ac = null;
 function beep(freq, dur, type, vol) {
@@ -330,22 +417,29 @@ function beep(freq, dur, type, vol) {
     g.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + dur);
     o.connect(g); g.connect(ac.destination);
     o.start(); o.stop(ac.currentTime + dur);
-  } catch (e) { /* audio optional */ }
+  } catch (e) { /* audio is optional */ }
 }
 
 /* ------------------------------------------------------------------ loop */
 function flap() {
-  if (state === 'start') { state = 'play'; cardStart.classList.remove('show'); }
+  if (state === 'start') {
+    state = 'play';
+    cardStart.classList.remove('show');
+    hud.classList.add('show');
+  }
   if (state === 'dead') {
-    if (t - deadAt < .55) return;      // avoid instant restart on the killing tap
-    reset(); state = 'play'; cardOver.classList.remove('show'); return;
+    if (t - deadAt < .55) return;   // ignore the tap that killed you
+    reset();
+    state = 'play';
+    cardOver.classList.remove('show');
+    hud.classList.add('show');
+    return;
   }
   cam.vy = FLAP;
   cam.roll = (Math.random() - .5) * .12;
   beep(520, .09, 'square', .045);
 }
 
-let deadAt = -9;
 function die() {
   state = 'dead'; deadAt = t; shake = 1;
   beep(160, .35, 'sawtooth', .07);
@@ -355,6 +449,8 @@ function die() {
   }
   sFinal.textContent = score;
   sBest.textContent = best;
+  hud.classList.remove('show');
+  elZone.classList.remove('show');
   cardOver.classList.add('show');
 }
 
@@ -364,9 +460,9 @@ function update(dt) {
   if (state === 'start') {
     cam.y = Math.sin(t * 1.6) * .45;
     cam.pitch = Math.sin(t * 1.6) * .05;
-    cam.z += 3.2 * dt;
+    cam.z += 2.6 * dt;
   } else if (state === 'play') {
-    speed = 12 + Math.min(score * .16, 7);
+    speed = BASE_SPEED + Math.min(score * .09, 4.5);
     cam.vy = Math.max(MAX_FALL, cam.vy + GRAVITY * dt);
     cam.y += cam.vy * dt;
     cam.z += speed * dt;
@@ -387,14 +483,17 @@ function update(dt) {
     }
   } else {
     cam.vy = Math.max(MAX_FALL, cam.vy + GRAVITY * 1.4 * dt);
-    cam.y = Math.max(FLOOR + RADIUS, cam.y + cam.vy * dt);
+    cam.y = Math.max(FLOOR + 0.9, cam.y + cam.vy * dt);
     shake = Math.max(0, shake - dt * 2.5);
   }
 
-  // smooth camera attitude
-  const wantPitch = state === 'play' ? Math.max(-.34, Math.min(.26, cam.vy * .028)) : cam.pitch;
+  easeZone(dt);
+
+  // once dead, level the view back up so the crash still shows the corridor
+  const wantPitch = state === 'play' ? Math.max(-.34, Math.min(.26, cam.vy * .03))
+                  : state === 'dead' ? .12 : cam.pitch;
   cam.pitch += (wantPitch - cam.pitch) * Math.min(1, dt * 9);
-  cam.roll  += (0 - cam.roll) * Math.min(1, dt * 5);
+  cam.roll += (0 - cam.roll) * Math.min(1, dt * 5);
 
   // recycle
   pipes = pipes.filter(p => p.z > cam.z - 8);
@@ -403,7 +502,29 @@ function update(dt) {
   while (far < cam.z + SPAWN_Z) { far += SPACING; addPipe(far); }
 
   for (const s of stars) {
-    if (s.z < cam.z - 3) { s.z = cam.z + SPAWN_Z + Math.random() * 12; s.x = (Math.random() - .5) * 30; s.y = FLOOR + Math.random() * (CEIL - FLOOR); }
+    if (s.z < cam.z - 3) {
+      s.z = cam.z + SPAWN_Z + Math.random() * 12;
+      s.x = (Math.random() - .5) * 30;
+      s.y = FLOOR + Math.random() * (CEIL - FLOOR);
+    }
+  }
+  for (const w of towers) if (w.z < cam.z - 6) seedTower(w, cam.z + SPAWN_Z + Math.random() * 20);
+}
+
+function syncHud() {
+  if (score !== shownScore) {
+    shownScore = score;
+    elScore.textContent = score;
+    elScore.classList.add('pop');
+    setTimeout(() => elScore.classList.remove('pop'), 130);
+
+    const zi = Math.floor(score / ZONE_LEN) % ZONES.length;
+    if (zi !== zoneIdx) {
+      zoneIdx = zi;
+      elZone.textContent = ZONES[zi].name;
+      elZone.classList.add('show');
+      setTimeout(() => elZone.classList.remove('show'), 2600);
+    }
   }
 }
 
@@ -411,31 +532,32 @@ function render() {
   ctx.save();
   if (shake > 0) ctx.translate((Math.random() - .5) * 14 * shake, (Math.random() - .5) * 14 * shake);
 
-  drawBackground();
-  drawSlab(CEIL, GREEN, .62);
-  drawSlab(FLOOR, GREEN, 1.05);
+  drawSky();
+  drawTowers();
+  drawSlab(CEIL, P.floor, .62);
+  drawSlab(FLOOR, P.floor, 1.05);
   drawGrid();
   drawStars();
 
   const sorted = pipes.slice().sort((a, b) => b.z - a.z);
-  // the score floats in the gap of the pipe being flown at, so it is
-  // occluded by anything nearer than that pipe
-  let next = null;
-  for (const p of pipes) if (p.z > cam.z + 4 && (!next || p.z < next.z)) next = p;
-  for (const p of sorted) {
-    if (p === next) drawScore3d(p.z + 3, p.gapY);
-    drawPipe(p);
-  }
+  for (const p of sorted) drawPipe(p);
 
-  // near-camera speed vignette
   const v = ctx.createRadialGradient(cx, cy, H * .3, cx, cy, H * .78);
   v.addColorStop(0, 'rgba(0,0,0,0)');
-  v.addColorStop(1, 'rgba(30,0,60,.5)');
+  v.addColorStop(1, 'rgba(0,0,0,.42)');
   ctx.fillStyle = v;
   ctx.fillRect(-40, -40, W + 80, H + 80);
   ctx.restore();
 
-  hud.textContent = state === 'play' ? score + '  ·  BEST ' + Math.max(best, score) : '';
+  // dim behind the overlays so a card reads against any palette
+  const dim = state === 'dead' ? Math.min(.5, (t - deadAt) * 1.6)
+            : state === 'start' ? .3 : 0;
+  if (dim > 0) {
+    ctx.fillStyle = 'rgba(6,2,14,' + dim.toFixed(3) + ')';
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  syncHud();
 }
 
 function frame(ts) {
@@ -447,8 +569,7 @@ function frame(ts) {
 }
 
 /* ---------------------------------------------------------------- input */
-function onTap(e) { e.preventDefault(); flap(); }
-cv.addEventListener('pointerdown', onTap);
+cv.addEventListener('pointerdown', e => { e.preventDefault(); flap(); });
 document.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
 window.addEventListener('keydown', e => {
   if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'Enter') { e.preventDefault(); flap(); }
