@@ -1,9 +1,15 @@
 # Flappy FPV
 
-First-person 3D Flappy Bird. One page, no dependencies.
+Two one-finger games on one page, no dependencies. The home screen picks one,
+and each keeps its own best score locally in the browser.
 
-Tap (or press space) to flap and fly through the gaps. The best score is kept
-locally in the browser.
+**Flappy FPV** — first-person 3D Flappy Bird. Tap (or press space) to flap and
+fly through the gaps.
+
+**Ring** — a hoop threaded on a wire. Hold to lift it, let go and it drops; the
+wire has to keep running clean through the hole. Touch the band and the run is
+over. The hoop reddens as the wire nears the metal, which is the only warning
+you get.
 
 ## Run it
 
@@ -17,7 +23,10 @@ Then go to http://localhost:8000 — it is built for mobile (portrait).
 
 ## How it works
 
-Everything lives in `index.html`: a small 3D engine written on a 2D canvas.
+Everything lives in `index.html`: a home screen and two games sharing one
+renderer, one bitmap font and one audio path.
+
+### The renderer, shared by both
 
 - everything is drawn into a small buffer — about 260 pixels tall — and blown
   up with hard edges, so the 3d engine produces pixel art rather than smooth
@@ -31,7 +40,22 @@ Everything lives in `index.html`: a small 3D engine written on a 2D canvas.
   for the pipes (which stay readable), quantised into six flat bands so depth
   reads as steps rather than a blur
 
-### Playing fair
+### Ring
+
+The hoop is modelled as a tube the wire has to stay inside: the wire is sampled
+at five points across the hoop's depth and the worst offender decides. That one
+rule gives the game its shape — a steep run is hard because the wire crosses
+the whole tube, so the hoop has to sit dead on the slope, not merely near it.
+
+The wire is a polyline built one node ahead of the hoop, steepening with the
+score and folding back on itself rather than leaving its lane. The hoop's lift
+and the scroll are expressed as fractions of the buffer height, so the game
+feels the same on any screen.
+
+A bang-bang autopilot — hold when the wire is above the hoop, release when it
+is below — survives about 32 seconds and 39 turns before the slopes beat it.
+
+### Flappy FPV: playing fair
 
 Three rules keep a death felt like your own fault:
 
