@@ -132,7 +132,7 @@ const RADIUS = 0.32;
 const GRAVITY = -21, FLAP = 7.1, MAX_FALL = -16;
 const BASE_SPEED = 9.5;              // pipes per second ≈ BASE_SPEED / SPACING
 
-const cam = { x: 0, y: 0, z: 0, vy: 0, pitch: 0, roll: 0 };
+const cam = { x: 0, y: 0, z: 0, vy: 0, pitch: 0 };
 let pipes = [], stars = [], towers = [];
 let speed = BASE_SPEED, score = 0, best = 0, shake = 0;
 let state = 'start';
@@ -327,7 +327,7 @@ function addPipe(z) {
 }
 
 function reset() {
-  cam.x = 0; cam.y = 0; cam.z = 0; cam.vy = 0; cam.pitch = 0; cam.roll = 0;
+  cam.x = 0; cam.y = 0; cam.z = 0; cam.vy = 0; cam.pitch = 0;
   pipes = []; score = 0; speed = BASE_SPEED; shake = 0; lastGapY = 0;
   for (let i = 0; i < 6; i++) addPipe(30 + i * SPACING);
   snapZone(); makeStars(); makeTowers();
@@ -337,15 +337,11 @@ function reset() {
 /* ------------------------------------------------------------ 3d helpers */
 const NEAR = 0.25;
 
+/* pitch only: the view tips with the climb and the dive, it never banks */
 function toCam(x, y, z) {
   const dx = x - cam.x, dy = y - cam.y, dz = z - cam.z;
   const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
-  const zr = dz * cp + dy * sp;
-  let   yr = dy * cp - dz * sp;
-  const cr = Math.cos(cam.roll), sr = Math.sin(cam.roll);
-  const xr = dx * cr - yr * sr;
-  yr = dx * sr + yr * cr;
-  return { x: xr, y: yr, z: zr };
+  return { x: dx, y: dy * cp - dz * sp, z: dz * cp + dy * sp };
 }
 
 function clipNear(poly) {
@@ -573,7 +569,6 @@ function flap() {
     return;
   }
   cam.vy = FLAP;
-  cam.roll = (Math.random() - .5) * .12;
   beep(520, .09, 'square', .045);
 }
 
@@ -629,7 +624,6 @@ function update(dt) {
   const wantPitch = state === 'play' ? Math.max(-.34, Math.min(.26, cam.vy * .03))
                   : state === 'dead' ? .12 : cam.pitch;
   cam.pitch += (wantPitch - cam.pitch) * Math.min(1, dt * 9);
-  cam.roll += (0 - cam.roll) * Math.min(1, dt * 5);
 
   // recycle
   pipes = pipes.filter(p => p.z > cam.z - 8);
