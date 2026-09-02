@@ -3,703 +3,644 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#08060f">
-<meta name="description" content="First-person 3D Flappy Bird. Tap to fly.">
+<meta name="theme-color" content="#f2ece1">
+<meta name="description" content="A new nine-hole mini golf course every day. Same course for everyone, one seed, one leaderboard.">
 <!-- the game is one file, so a stale cached copy is a stale build: always revalidate -->
 <meta http-equiv="Cache-Control" content="no-cache">
-<title>Flappy FPV</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%237b1fdb'/><rect x='8' y='4' width='16' height='9' fill='%2356d62e'/><rect x='8' y='19' width='16' height='9' fill='%2356d62e'/></svg>">
+<title>Daily Mini Golf</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2382c48d'/><circle cx='12' cy='20' r='5' fill='%23fff'/><path d='M21 6v20' stroke='%2323262e' stroke-width='2'/><path d='M21 7l7 3-7 3z' fill='%23e8593c'/></svg>">
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
-  html,body{height:100%;overflow:hidden;background:#08060f}
+  :root{
+    --paper:#f2ece1; --ink:#23262e; --dim:#7b7568; --line:#ddd4c4;
+    --accent:#e8593c; --felt:#8ec89a; --sand:#e9d2a3; --water:#8ab7e0;
+  }
+  html,body{height:100%;overflow:hidden;background:var(--paper);color:var(--ink)}
   body{
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    font-family:ui-rounded,"SF Pro Rounded","Hiragino Maru Gothic ProN",-apple-system,
+                BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
     -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;
     touch-action:none;overscroll-behavior:none;
   }
-  #game{
-    position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;
-    image-rendering:pixelated;image-rendering:crisp-edges;
+  #g{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+
+  .screen{
+    position:fixed;inset:0;display:flex;flex-direction:column;
+    padding:calc(env(safe-area-inset-top) + 26px) 22px calc(env(safe-area-inset-bottom) + 26px);
+    background:var(--paper);overflow-y:auto;overscroll-behavior:contain;
+  }
+  .screen[hidden]{display:none}
+  .grow{flex:1}
+
+  /* ---------------------------------------------------------- type ---- */
+  .kicker{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--dim);font-weight:700}
+  h1{font-size:clamp(38px,12vw,58px);line-height:.94;letter-spacing:-.035em;font-weight:800}
+  h2{font-size:26px;line-height:1.05;letter-spacing:-.02em;font-weight:800}
+  .lede{font-size:15px;line-height:1.55;color:var(--dim);max-width:30ch}
+
+  /* -------------------------------------------------------- controls -- */
+  .btn{
+    display:flex;align-items:center;justify-content:center;gap:8px;
+    height:58px;border-radius:16px;border:none;width:100%;
+    background:var(--ink);color:var(--paper);font:inherit;font-size:16px;font-weight:800;
+    letter-spacing:.04em;cursor:pointer;
+  }
+  .btn.accent{background:var(--accent)}
+  .btn.ghost{background:transparent;color:var(--ink);border:2px solid var(--line);height:52px;font-size:14px}
+  .btn:active{transform:translateY(1px)}
+  .row{display:flex;gap:10px}
+
+  /* ------------------------------------------------------------ hud --- */
+  #hud{
+    position:fixed;top:calc(env(safe-area-inset-top) + 14px);left:0;right:0;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 20px;pointer-events:none;
+  }
+  #hud[hidden]{display:none}
+  .chip{
+    display:flex;align-items:baseline;gap:6px;background:rgba(255,255,255,.72);
+    border:1px solid var(--line);border-radius:12px;padding:7px 12px;backdrop-filter:blur(6px);
+  }
+  .chip b{font-size:17px;font-weight:800;letter-spacing:-.01em}
+  .chip span{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);font-weight:700}
+  #back{pointer-events:auto;background:none;border:none;font:inherit;color:var(--dim);
+        font-size:12px;font-weight:700;letter-spacing:.1em;padding:8px;cursor:pointer}
+
+  /* --------------------------------------------------------- toast ---- */
+  #toast{
+    position:fixed;left:0;right:0;top:38%;text-align:center;pointer-events:none;
+    opacity:0;transform:scale(.9);transition:opacity .18s ease,transform .18s cubic-bezier(.2,.9,.3,1.5);
+  }
+  #toast.show{opacity:1;transform:none}
+  #toast b{font-size:44px;font-weight:800;letter-spacing:-.03em;display:block}
+  #toast i{font-style:normal;font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);font-weight:700}
+
+  /* ----------------------------------------------------- scorecard ---- */
+  .card{border:2px solid var(--line);border-radius:18px;padding:16px}
+  .holes{display:grid;grid-template-columns:repeat(9,1fr);gap:4px;margin-top:12px}
+  .holes div{text-align:center}
+  .holes .n{font-size:9px;color:var(--dim);font-weight:700;margin-bottom:4px}
+  .holes .s{
+    height:30px;display:flex;align-items:center;justify-content:center;border-radius:9px;
+    font-size:14px;font-weight:800;background:#e7e0d2;
+  }
+  .s.under{background:#8ec89a;color:#14321c}
+  .s.par{background:#e7e0d2}
+  .s.over{background:#f0cf9a}
+  .s.bad{background:#eda58f}
+
+  .total{display:flex;align-items:baseline;justify-content:space-between;margin-top:16px}
+  .total b{font-size:44px;font-weight:800;letter-spacing:-.03em}
+  .total em{font-style:normal;font-size:20px;font-weight:800;color:var(--dim)}
+
+  /* ---------------------------------------------------- leaderboard --- */
+  .board{display:flex;flex-direction:column;gap:2px;margin-top:10px}
+  .board .rowe{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:12px}
+  .board .rowe:nth-child(odd){background:rgba(255,255,255,.6)}
+  .board .rowe.me{background:var(--felt);color:#14321c}
+  .board .pos{width:22px;font-size:12px;font-weight:800;color:var(--dim)}
+  .board .rowe.me .pos{color:#14321c}
+  .board .who{flex:1;font-size:15px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .board .sc{font-size:16px;font-weight:800}
+  .empty{color:var(--dim);font-size:14px;padding:14px 2px;line-height:1.5}
+
+  input[type=text]{
+    width:100%;height:52px;border-radius:14px;border:2px solid var(--line);background:#fff;
+    padding:0 16px;font:inherit;font-size:16px;font-weight:700;color:var(--ink);
+  }
+  input[type=text]:focus{outline:none;border-color:var(--ink)}
+
+  .stack{display:flex;flex-direction:column;gap:12px}
+  .mt{margin-top:22px}
+  .sep{height:2px;background:var(--line);border-radius:2px;margin:20px 0}
+  .share{
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.7;
+    background:#fff;border:2px solid var(--line);border-radius:14px;padding:14px;white-space:pre-wrap;
   }
 </style>
 </head>
 <body>
-<canvas id="game"></canvas>
+<canvas id="g"></canvas>
+
+<div id="hud" hidden>
+  <button id="back">← QUIT</button>
+  <div class="chip"><span>hole</span><b id="hHole">1/9</b></div>
+  <div class="chip"><span>par</span><b id="hPar">3</b></div>
+  <div class="chip"><span>strokes</span><b id="hStrokes">0</b></div>
+</div>
+
+<div id="toast"><b id="tBig">PAR</b><i id="tSub">hole 1</i></div>
+
+<div class="screen" id="scTitle">
+  <div class="grow" style="display:flex;flex-direction:column;justify-content:center;gap:18px">
+    <div class="kicker">Course of the day · <span id="courseNo">#1</span></div>
+    <h1>DAILY<br>MINI GOLF</h1>
+    <p class="lede">Nine holes, generated from today's date. Everyone in the world plays the same course until midnight.</p>
+    <div class="card" style="margin-top:6px">
+      <div class="kicker">Today</div>
+      <b style="display:block;font-size:23px;font-weight:800;letter-spacing:-.02em;margin-top:6px" id="tDate">—</b>
+      <div style="color:var(--dim);font-size:13px;margin-top:7px">
+        Par <b id="tPar" style="color:var(--ink)">27</b> · <span id="tBest">not played yet</span>
+      </div>
+    </div>
+  </div>
+  <div class="stack">
+    <button class="btn accent" id="bPlay">PLAY THE ROUND</button>
+    <button class="btn ghost" id="bBoard">TODAY'S LEADERBOARD</button>
+    <div style="text-align:center;font-size:12px;color:var(--dim);font-weight:700" id="tNext">—</div>
+  </div>
+</div>
+
+<div class="screen" id="scRound" hidden>
+  <div class="kicker">Round complete · <span id="rNo">#1</span></div>
+  <h2 class="mt" id="rVerdict">Level par</h2>
+  <div class="card mt">
+    <div class="kicker">Scorecard</div>
+    <div class="holes" id="rHoles"></div>
+    <div class="total"><b id="rTotal">27</b><em id="rVsPar">E</em></div>
+  </div>
+  <div class="mt" id="rNameWrap">
+    <div class="kicker" style="margin-bottom:8px">Post to the leaderboard</div>
+    <div class="row">
+      <input type="text" id="rName" maxlength="14" placeholder="Your name" autocomplete="off" spellcheck="false">
+      <button class="btn accent" id="rPost" style="width:120px;font-size:15px">POST</button>
+    </div>
+  </div>
+  <div class="sep"></div>
+  <div class="kicker">Today's leaderboard</div>
+  <div class="board" id="rBoard"></div>
+  <div class="stack mt">
+    <button class="btn ghost" id="rShare">COPY RESULT</button>
+    <button class="btn" id="rAgain">PLAY AGAIN</button>
+    <button class="btn ghost" id="rHome">HOME</button>
+  </div>
+</div>
+
+<div class="screen" id="scBoard" hidden>
+  <div class="kicker">Leaderboard · <span id="bNo">#1</span></div>
+  <h2 class="mt">Today's round</h2>
+  <p class="lede mt" style="font-size:13px">Best score per player, on this device. The board clears when tomorrow's course opens.</p>
+  <div class="board" id="bList"></div>
+  <div class="grow"></div>
+  <button class="btn ghost mt" id="bHome">BACK</button>
+</div>
 
 <script>
 (() => {
 "use strict";
 
 /* ---------------------------------------------------------------- setup */
-/* The whole game is drawn into a small buffer and blown up with hard edges:
-   one buffer pixel lands on screen as one square block, so the 3d engine
-   produces pixel art rather than smooth polygons. Everything below — the
-   projection, the hud, the cards — works in buffer pixels. */
-const cv = document.getElementById('game');
-const sctx = cv.getContext('2d');
-const buf = document.createElement('canvas');
-const ctx = buf.getContext('2d');
+const cv = document.getElementById('g');
+const ctx = cv.getContext('2d');
+const $ = id => document.getElementById(id);
 
-let W = 0, H = 0, cx = 0, cy = 0, focal = 0;   // the buffer
-let SW = 0, SH = 0;                            // the screen, in css pixels
-const FOV = 68 * Math.PI / 180;
-const PIXEL = 260;                   // wanted buffer height, in game pixels
-
+let SW = 0, SH = 0;
 function resize() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
   SW = window.innerWidth; SH = window.innerHeight;
   cv.width = Math.round(SW * dpr); cv.height = Math.round(SH * dpr);
   cv.style.width = SW + 'px'; cv.style.height = SH + 'px';
-  sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  sctx.imageSmoothingEnabled = false;
-
-  const pix = Math.max(2, Math.min(6, Math.round(SH / PIXEL)));
-  W = Math.max(96, Math.round(SW / pix));
-  H = Math.max(140, Math.round(SH / pix));
-  buf.width = W; buf.height = H;
-  ctx.imageSmoothingEnabled = false;
-  cx = W / 2; cy = H / 2;
-  focal = (H / 2) / Math.tan(FOV / 2);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  layout();
 }
 window.addEventListener('resize', resize);
-resize();
 
-/* ---------------------------------------------------------------- world */
-const FLOOR = -6, CEIL = 6;          // corridor, also the kill planes
-const HALF_W = 9.5;                  // floor / ceiling half width
-const PIPE_W = 2.9, PIPE_D = 2.9;
-const CAP_H = 0.75, CAP_OUT = 0.42;  // pipe lip
-const GAP = 4.6;
-const SPACING = 13;
-const SPAWN_Z = 78;
-const RADIUS = 0.32;                 // how close you sit to floor and ceiling
-const HIT = 0.20;                    // and the smaller box the pipes test against,
-                                     // so a hair's breadth reads as a hair's breadth
-const GRAVITY = -18, FLAP = 6.6, MAX_FALL = -14;
-const BASE_SPEED = 7.6;              // pipes per second ≈ BASE_SPEED / SPACING
-
-const cam = { x: 0, y: 0, z: 0, vy: 0, pitch: 0 };
-let pipes = [], stars = [], towers = [];
-let speed = BASE_SPEED, score = 0, best = 0, shake = 0;
-let state = 'start';
-let t = 0, lastTs = 0, deadAt = -9, poppedAt = -9;
-
-try { best = parseInt(localStorage.getItem('flappyFpvBest') || '0', 10) || 0; } catch (e) { best = 0; }
-
-/* ---------------------------------------------------------------- zones
-   The scenery is generated, never listed: every ZONE_DIST units flown the
-   corridor crosses into a brand-new zone whose palette and skyline style are
-   derived from its index, so the world keeps changing as far as you get and
-   never loops back to a zone you have already seen. */
-const ZONE_DIST = 104;                 // ≈ 8 pipes' worth of corridor
-
-/* deterministic pseudo-random: same zone index always rebuilds the same zone */
-function rnd(n) {
-  const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
-  return x - Math.floor(x);
+/* ------------------------------------------------------------- the day
+   One seed per calendar day: the course is the date, so everyone plays the
+   same nine holes and nobody has to agree on anything. */
+const EPOCH = Date.UTC(2026, 0, 1);
+function today() {
+  const d = new Date();
+  return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() };
 }
-function zoneAt(z) { return Math.max(0, Math.floor(z / ZONE_DIST)); }
+const T = today();
+const DAY_KEY = T.y + '-' + String(T.m + 1).padStart(2, '0') + '-' + String(T.d).padStart(2, '0');
+const COURSE_NO = Math.round((Date.UTC(T.y, T.m, T.d) - EPOCH) / 86400000) + 1;
 
-/* h, s, l in 0..1 -> [r, g, b] in 0..255 */
-function hsl(h, s, l) {
-  h = ((h % 1) + 1) % 1;
-  const a = s * Math.min(l, 1 - l);
-  const f = n => {
-    const k = (n + h * 12) % 12;
-    return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, Math.min(9 - k, 1)))));
+function hash(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+/* mulberry32: small, fast, and identical everywhere — which is the point */
+function rngFrom(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
   };
-  return [f(0), f(8), f(4)];
 }
 
-function luma(c) { return (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255; }
+/* ------------------------------------------------------------ the course
+   Everything is a rectangle or a disc, which keeps the collisions honest and
+   the drawing flat. The course lives in a fixed 100 x 148 space and is scaled
+   to whatever screen it lands on. */
+const CW = 100, CH = 182;              // the green, in course units
+const DH = 148;                        // and the space the holes are composed
+                                       // in, kept fixed so the par calibration
+                                       // survives a change of proportions
+const BALL_R = 1.75, CUP_R = 3.0;
 
-/* Hue alone does not keep the pipes readable — a green and a magenta can be
-   exactly as bright. So the pipe lightness is chosen, not assumed: the value
-   that stands furthest from the brightness of the corridor and of the sky,
-   with a nudge back toward mid-tones so a zone never turns black-on-colour. */
-function pickPipeL(h, s, floorRgb, skyRgb) {
-  const lf = luma(floorRgb), ls = luma(skyRgb);
-  let bestL = .55, bestScore = -9;
-  for (let l = .22; l <= .82; l += .04) {
-    const c = luma(hsl(h, s, l));
-    const score = Math.min(Math.abs(c - lf), Math.abs(c - ls) * .85) - Math.abs(l - .55) * .18;
-    if (score > bestScore) { bestScore = score; bestL = l; }
+const rect = (x, y, w, h) => ({ x, y, w, h });
+
+function layoutHole(rnd, index) {
+  const hard = index / 8;
+  const walls = [], bumpers = [], sand = [], water = [];
+
+  // A round needs short holes as much as long ones — nine drives across the
+  // whole green is a slog, and a par 2 you can ace is what keeps you honest.
+  const len = rnd();
+  const cupY = len < .28 ? 52 + rnd() * 20         // short: a punch and a putt
+             : len < .72 ? 30 + rnd() * 20         // medium
+             : 14 + rnd() * 14;                    // long
+  const cup = { x: 16 + rnd() * 68, y: cupY };
+  // on a short hole the tee sits under the cup, otherwise "short" only means
+  // "diagonally across the green", which is not short at all
+  const teeX = len < .28 ? cup.x + (rnd() - .5) * 34 : 16 + rnd() * 68;
+  const tee = { x: Math.max(12, Math.min(CW - 12, teeX)), y: DH - 26 + rnd() * 10 };
+
+  // Obstacles go between the tee and the cup. Anywhere else they are scenery.
+  const midY = (tee.y + cup.y) / 2;
+  const at = (spread) => Math.max(14, Math.min(DH - 34, midY - 4 + (rnd() - .5) * spread));
+
+  const kind = index < 2 ? ['open', 'open', 'block'][(rnd() * 3) | 0]
+             : index < 5 ? ['open', 'gate', 'block', 'baffle'][(rnd() * 4) | 0]
+             : index < 8 ? ['gate', 'baffle', 'block', 'corridor', 'pocket'][(rnd() * 5) | 0]
+             : ['baffle', 'corridor', 'pocket'][(rnd() * 3) | 0];
+
+  if (kind === 'block') {
+    const w = 22 + rnd() * 30, h = 10 + rnd() * 14;
+    walls.push(rect(10 + rnd() * (CW - 20 - w), at(30), w, h));
+  } else if (kind === 'gate') {
+    const y = at(26), gap = 19 + rnd() * 11, gx = 12 + rnd() * (CW - 24 - gap);
+    walls.push(rect(0, y, gx, 9), rect(gx + gap, y, CW - gx - gap, 9));
+  } else if (kind === 'baffle') {
+    const y1 = Math.max(14, midY - 22 - rnd() * 10), y2 = Math.min(DH - 30, midY + 16 + rnd() * 12);
+    const l1 = 40 + rnd() * 26, l2 = 40 + rnd() * 26;
+    walls.push(rect(0, y1, l1, 8), rect(CW - l2, y2, l2, 8));
+  } else if (kind === 'corridor') {
+    const y = at(18), cx0 = 24 + rnd() * 24, w = 22 + rnd() * 10;
+    walls.push(rect(0, y, cx0, 9), rect(cx0 + w, y, CW - cx0 - w, 9));
+    walls.push(rect(cx0 - 5, y + 9, 6, 22), rect(cx0 + w - 1, y + 9, 6, 22));
+  } else if (kind === 'pocket') {
+    const px = cup.x < CW / 2 ? cup.x + 12 : cup.x - 18;
+    walls.push(rect(Math.max(2, Math.min(CW - 8, px)), Math.max(6, cup.y - 12), 6, 28));
+    walls.push(rect(14 + rnd() * 30, at(24), 32 + rnd() * 20, 8));
   }
-  return bestL;
+
+  const nb = hard > .5 ? 1 + ((rnd() * 3) | 0) : (rnd() < .5 ? 1 : 0);
+  for (let i = 0; i < nb; i++)
+    bumpers.push({ x: 14 + rnd() * (CW - 28), y: Math.max(20, at(60)), r: 5 + rnd() * 4 });
+
+  if (rnd() < .3 + hard * .5) {
+    const w = 20 + rnd() * 26, h = 14 + rnd() * 16;
+    sand.push(rect(8 + rnd() * (CW - 16 - w), Math.max(14, at(50)), w, h));
+  }
+  if (hard > .45 && rnd() < .45) {
+    const w = 16 + rnd() * 24, h = 10 + rnd() * 12;
+    water.push(rect(8 + rnd() * (CW - 16 - w), Math.max(20, at(46)), w, h));
+  }
+  return { kind, walls, bumpers, sand, water, tee, cup };
 }
 
-/* Zone 0 is the game's own colours — the first flight always looks like
-   Flappy FPV. Everything past it is generated. */
-const NEON = {
-  sky: [[143, 52, 242], [123, 31, 219], [88, 18, 160]],
-  void: [123, 31, 219], floor: [44, 142, 52], pipe: [104, 224, 56],
-  lip: [156, 244, 96], tower: [78, 16, 148]
-};
-
-/* One dominant hue for the sky and the void, a companion hue for the
-   corridor, and a hue roughly opposite for the pipes; the pipes are then
-   pushed away from the corridor's brightness so the gaps stay readable
-   however bright or dark the zone came out. */
-function zonePalette(i) {
-  if (i === 0) return { sky: NEON.sky.map(c => c.slice()), void: NEON.void.slice(),
-                        floor: NEON.floor.slice(), pipe: NEON.pipe.slice(),
-                        lip: NEON.lip.slice(), tower: NEON.tower.slice() };
-  const h = (0.11 + i * 0.381966) % 1;                 // golden-angle hue walk
-  const a = rnd(i * 5 + 1), b = rnd(i * 5 + 2);
-  const c = rnd(i * 5 + 3), d = rnd(i * 5 + 4);
-  const dir = rnd(i * 5 + 5) < .5 ? 1 : -1;            // which way round the wheel
-  // The hues are free, the values are not: a bright sky over a deep corridor,
-  // every time. Letting saturation and lightness roam is what produced the
-  // washed-out and the muddy zones — the ranges here are deliberately narrow.
-  const sat = .58 + a * .26;
-  const lum = .88 + b * .2;
-  const hFloor = h + dir * (0.26 + c * 0.12);
-  const hPipe  = h + dir * (0.44 + d * 0.14);
-  const cl = v => Math.max(0.04, Math.min(0.92, v));
-  const sky = [
-    hsl(h, sat * .74, cl(.60 * lum)),
-    hsl(h, sat * .92, cl(.34 * lum)),
-    hsl(h + .05, sat, cl(.12 * lum))
-  ];
-  const floor = hsl(hFloor, sat * .78, cl(.38 * lum));
-  const lPipe = pickPipeL(hPipe, .80, floor, sky[1]);
-  return {
-    sky: sky,
-    void:  hsl(h, sat * .92, cl(.26 * lum)),
-    floor: floor,
-    pipe:  hsl(hPipe, .80, lPipe),
-    lip:   hsl(hPipe, .66, Math.min(.90, lPipe + .22)),
-    tower: hsl(h, sat * .8, cl(.10 * lum))
-  };
-}
-
-/* The skyline gets its own recipe per zone: how the silhouettes are built,
-   how far out they stand, how tall they grow. */
-function zoneDeco(i) {
-  const a = rnd(i * 9 + 21), b = rnd(i * 9 + 23);
-  const c = rnd(i * 9 + 25), d = rnd(i * 9 + 27);
-  return {
-    style: Math.floor(a * 4) % 4,      // 0 blocks, 1 spires, 2 mesas, 3 stacks
-    spread: 8 + b * 17,                // how far into the void they stand
-    w: 1.5 + c * 2.6,                  // base footprint
-    wVar: 1 + d * 3.2,
-    h: 4 + d * 9,                      // base height
-    hVar: 6 + a * 24,
-    star: .55 + c * 1.5                // dust: fine grain here, coarse there
-  };
-}
-
-/* zones are rebuilt on demand, and cached so it is one build per crossing */
-let zpI = -1, zpPal = null, zdI = -1, zdDeco = null;
-function paletteAt(z) {
-  const i = zoneAt(z);
-  if (i !== zpI) { zpI = i; zpPal = zonePalette(i); }
-  return zpPal;
-}
-function decoAt(z) {
-  const i = zoneAt(z);
-  if (i !== zdI) { zdI = i; zdDeco = zoneDeco(i); }
-  return zdDeco;
-}
-
-// live palette, eased toward the zone the camera is flying through
-const P = {
-  sky: [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
-  void: [0, 0, 0], floor: [0, 0, 0], pipe: [0, 0, 0],
-  lip: [0, 0, 0], tower: [0, 0, 0]
-};
-
-function easeArr(a, b, k) { for (let i = 0; i < a.length; i++) a[i] += (b[i] - a[i]) * k; }
-function easeZone(dt) {
-  const z = paletteAt(cam.z);
-  const k = Math.min(1, dt * 1.6);
-  for (let i = 0; i < 3; i++) easeArr(P.sky[i], z.sky[i], k);
-  easeArr(P.void, z.void, k);
-  easeArr(P.floor, z.floor, k);
-  easeArr(P.pipe, z.pipe, k);
-  easeArr(P.lip, z.lip, k);
-  easeArr(P.tower, z.tower, k);
-}
-function snapZone() {
-  const z = paletteAt(cam.z);
-  for (let i = 0; i < 3; i++) P.sky[i] = z.sky[i].slice();
-  P.void = z.void.slice(); P.floor = z.floor.slice(); P.pipe = z.pipe.slice();
-  P.lip = z.lip.slice(); P.tower = z.tower.slice();
-}
-
-function seedStar(st, z) {
-  st.x = (Math.random() - .5) * 30;
-  st.y = FLOOR + Math.random() * (CEIL - FLOOR);
-  st.z = z;
-  st.s = (0.05 + Math.random() * 0.09) * decoAt(z).star;
-  return st;
-}
-function makeStars() {
-  stars = [];
-  for (let i = 0; i < 90; i++) stars.push(seedStar({}, cam.z + Math.random() * SPAWN_Z));
-}
-
-/* Silhouettes standing out in the void, past the edge of the corridor. A
-   tower is built from the recipe of the zone it spawns into — and it spawns
-   SPAWN_Z ahead, so the next skyline rises on the horizon before its colours
-   reach you. */
-function seedTower(tw, z) {
-  const dc = decoAt(z);
-  const side = Math.random() < .5 ? -1 : 1;
-  tw.x = side * (11 + Math.random() * dc.spread);
-  tw.w = dc.w + Math.random() * dc.wVar;
-  tw.d = dc.w + Math.random() * dc.wVar;
-  tw.h = dc.h + Math.random() * dc.hVar;
-  tw.style = dc.style;
-  tw.tint = .82 + Math.random() * .34;
-  tw.tilt = (Math.random() - .5) * 1.1;
-  tw.z = z;
-  // the far-away stand-in: one block with the same overall footprint
-  const lod = [[1, 1], [1, 1.12], [1.8, .74], [1.2, 1], [1, 1]][tw.style];
-  tw.lw = tw.w * lod[0]; tw.ld = tw.d * lod[0]; tw.lh = tw.h * lod[1];
-  return tw;
-}
-function makeTowers() {
-  towers = [];
-  for (let i = 0; i < 22; i++) towers.push(seedTower({}, cam.z + Math.random() * (SPAWN_Z + 20)));
-}
-
-let lastGapY = 0;
-/* Gaps drift rather than teleport: a new gap stays within reach of the
-   previous one, so a run is always physically flyable. */
-function addPipe(z) {
-  const span = (CEIL - FLOOR - GAP) / 2 - 0.9;
-  let y = lastGapY + (Math.random() * 2 - 1) * 2.2;
-  if (y > span || y < -span) y = lastGapY - (y - lastGapY);
-  lastGapY = Math.max(-span, Math.min(span, y));
-  pipes.push({ z, gapY: lastGapY, scored: false });
-}
-
-function reset() {
-  cam.x = 0; cam.y = 0; cam.z = 0; cam.vy = 0; cam.pitch = 0;
-  pipes = []; score = 0; speed = BASE_SPEED; shake = 0; lastGapY = 0;
-  for (let i = 0; i < 6; i++) addPipe(30 + i * SPACING);
-  snapZone(); makeStars(); makeTowers();
-  poppedAt = -9;
-}
-
-/* ------------------------------------------------------------ 3d helpers */
-const NEAR = 0.25;
-
-/* pitch only: the view tips with the climb and the dive, it never banks */
-function toCam(x, y, z) {
-  const dx = x - cam.x, dy = y - cam.y, dz = z - cam.z;
-  const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
-  return { x: dx, y: dy * cp - dz * sp, z: dz * cp + dy * sp };
-}
-
-function clipNear(poly) {
-  const out = [];
-  for (let i = 0; i < poly.length; i++) {
-    const a = poly[i], b = poly[(i + 1) % poly.length];
-    const ain = a.z >= NEAR, bin = b.z >= NEAR;
-    if (ain) out.push(a);
-    if (ain !== bin) {
-      const k = (NEAR - a.z) / (b.z - a.z);
-      out.push({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z: NEAR });
+/* A course nobody can finish is worse than a boring one: flood fill the hole
+   on a coarse grid and only keep a layout where the ball can actually roll
+   from the tee to the cup. */
+function reachable(h) {
+  const S = 2, gw = Math.ceil(CW / S), gh = Math.ceil(CH / S);
+  const blocked = new Uint8Array(gw * gh);
+  const pad = BALL_R * .9;
+  for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
+    const x = i * S + S / 2, y = j * S + S / 2;
+    let b = x < pad || y < pad || x > CW - pad || y > CH - pad;
+    if (!b) for (const w of h.walls)
+      if (x > w.x - pad && x < w.x + w.w + pad && y > w.y - pad && y < w.y + w.h + pad) { b = true; break; }
+    if (!b) for (const c of h.bumpers)
+      if (Math.hypot(x - c.x, y - c.y) < c.r + pad) { b = true; break; }
+    if (!b) for (const w of h.water)
+      if (x > w.x && x < w.x + w.w && y > w.y && y < w.y + w.h) { b = true; break; }
+    blocked[j * gw + i] = b ? 1 : 0;
+  }
+  const idx = p => Math.min(gh - 1, Math.max(0, Math.floor(p.y / S))) * gw
+                 + Math.min(gw - 1, Math.max(0, Math.floor(p.x / S)));
+  const from = idx(h.tee), to = idx(h.cup);
+  if (blocked[from] || blocked[to]) return false;
+  const seen = new Uint8Array(gw * gh), queue = [from];
+  seen[from] = 1;
+  while (queue.length) {
+    const c = queue.pop();
+    if (c === to) return true;
+    const cxx = c % gw, cyy = (c / gw) | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = cxx + dx, ny = cyy + dy;
+      if (nx < 0 || ny < 0 || nx >= gw || ny >= gh) continue;
+      const n = ny * gw + nx;
+      if (seen[n] || blocked[n]) continue;
+      seen[n] = 1; queue.push(n);
     }
   }
-  return out;
+  return false;
 }
 
-function path(poly) {
-  const p = clipNear(poly);
-  if (p.length < 3) return false;
-  ctx.beginPath();
-  for (let i = 0; i < p.length; i++) {
-    const sx = cx + focal * p[i].x / p[i].z;
-    const sy = cy - focal * p[i].y / p[i].z;
-    i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy);
+/* Par is read off the hole, not decided in advance: how far it is, and how
+   much is in the way. */
+function parFor(h) {
+  const d = Math.hypot(h.cup.x - h.tee.x, h.cup.y - h.tee.y);
+  const shape = { open: 0, block: 1, gate: 1.4, pocket: 2.1, baffle: 2.2, corridor: 2.5 }[h.kind] || 1;
+  const clutter = shape + h.bumpers.length * .5 + h.water.length * 1.4 + h.sand.length * .4;
+  if (d > 112 || clutter > 3.2) return 4;
+  if (d < 82 && clutter < 1.4) return 2;
+  return 3;
+}
+
+/* Holes are composed in a 100 x 148 space and stretched onto the taller
+   playfield, so a phone screen is full of green rather than framing it. */
+function stretch(h) {
+  const k = CH / DH;
+  for (const r of h.walls.concat(h.sand, h.water)) { r.y *= k; r.h *= k; }
+  for (const c of h.bumpers) c.y *= k;
+  h.tee.y *= k; h.cup.y *= k;
+  return h;
+}
+
+function buildCourse(key) {
+  const holes = [];
+  for (let i = 0; i < 9; i++) {
+    let h = null;
+    for (let attempt = 0; attempt < 40 && !h; attempt++) {
+      const cand = layoutHole(rngFrom(hash(key + ':' + i + ':' + attempt)), i);
+      cand.par = parFor(cand);                 // read before the stretch
+      if (reachable(stretch(cand))) h = cand;
+    }
+    if (!h) {                                  // the fallback is always playable
+      h = { kind: 'open', walls: [], bumpers: [], sand: [], water: [],
+            tee: { x: 50, y: CH - 24 }, cup: { x: 50, y: 26 }, par: 3 };
+    }
+    holes.push(h);
   }
+  return holes;
+}
+
+const COURSE = buildCourse(DAY_KEY);
+const TOTAL_PAR = COURSE.reduce((a, h) => a + h.par, 0);
+
+/* ------------------------------------------------------------- the game */
+const FELT_K = 1.55, SAND_K = 8.5, REST = .68, BUMP = .92;
+const SPEED_MIN = 22, SPEED_MAX = 214, STOP = 1.4, SINK_SPEED = 66;
+const MAX_STROKES = 8;
+
+let hole = 0, strokes = 0, card = [], mode = 'title';
+let holeOver = false;                // set while a finished hole is on screen
+let ball = { x: 0, y: 0, vx: 0, vy: 0, sunk: 0 };
+let restPos = { x: 0, y: 0 }, moving = false, aim = null, splash = 0, sinkT = 0;
+
+let ox = 0, oy = 0, scale = 1;                 // course space -> screen
+function layout() {
+  const padX = 16, top = 74, bot = 26;
+  scale = Math.min((SW - padX * 2) / CW, (SH - top - bot) / CH);
+  ox = (SW - CW * scale) / 2;
+  oy = top + ((SH - top - bot) - CH * scale) / 2;
+}
+const sx = x => ox + x * scale, sy = y => oy + y * scale;
+const wx = x => (x - ox) / scale, wy = y => (y - oy) / scale;
+
+function startHole(i) {
+  hole = i; strokes = 0; splash = 0; sinkT = 0; holeOver = false;
+  const h = COURSE[i];
+  ball = { x: h.tee.x, y: h.tee.y, vx: 0, vy: 0, sunk: 0 };
+  restPos = { x: ball.x, y: ball.y };
+  moving = false; aim = null;
+  hud();
+}
+
+function hud() {
+  $('hHole').textContent = (hole + 1) + '/9';
+  $('hPar').textContent = COURSE[hole].par;
+  $('hStrokes').textContent = strokes;
+}
+
+const inRect = (p, r) => p.x > r.x && p.x < r.x + r.w && p.y > r.y && p.y < r.y + r.h;
+
+function bounceRect(r) {
+  const nx = Math.max(r.x, Math.min(ball.x, r.x + r.w));
+  const ny = Math.max(r.y, Math.min(ball.y, r.y + r.h));
+  let dx = ball.x - nx, dy = ball.y - ny;
+  let d = Math.hypot(dx, dy);
+  if (d >= BALL_R) return;
+  if (d < 1e-6) {                              // dead centre: leave the way we came
+    dx = ball.vx; dy = ball.vy; d = Math.hypot(dx, dy) || 1;
+  }
+  const ux = dx / d, uy = dy / d;
+  ball.x = nx + ux * BALL_R; ball.y = ny + uy * BALL_R;
+  const dot = ball.vx * ux + ball.vy * uy;
+  if (dot < 0) { ball.vx -= (1 + REST) * dot * ux; ball.vy -= (1 + REST) * dot * uy; }
+}
+
+function bounceDisc(c) {
+  const dx = ball.x - c.x, dy = ball.y - c.y, d = Math.hypot(dx, dy);
+  if (d >= c.r + BALL_R || d < 1e-6) return;
+  const ux = dx / d, uy = dy / d;
+  ball.x = c.x + ux * (c.r + BALL_R); ball.y = c.y + uy * (c.r + BALL_R);
+  const dot = ball.vx * ux + ball.vy * uy;
+  if (dot < 0) { ball.vx -= (1 + BUMP) * dot * ux; ball.vy -= (1 + BUMP) * dot * uy; }
+}
+
+function physics(dt) {
+  const h = COURSE[hole];
+  if (ball.sunk) { sinkT += dt; return; }
+  if (!moving) return;
+  const sub = 8, s = dt / sub;
+  for (let i = 0; i < sub; i++) {
+    const k = h.sand.some(r => inRect(ball, r)) ? SAND_K : FELT_K;
+    const damp = Math.exp(-k * s);
+    ball.vx *= damp; ball.vy *= damp;
+    ball.x += ball.vx * s; ball.y += ball.vy * s;
+
+    if (ball.x < BALL_R) { ball.x = BALL_R; ball.vx = Math.abs(ball.vx) * REST; }
+    if (ball.y < BALL_R) { ball.y = BALL_R; ball.vy = Math.abs(ball.vy) * REST; }
+    if (ball.x > CW - BALL_R) { ball.x = CW - BALL_R; ball.vx = -Math.abs(ball.vx) * REST; }
+    if (ball.y > CH - BALL_R) { ball.y = CH - BALL_R; ball.vy = -Math.abs(ball.vy) * REST; }
+    for (const r of h.walls) bounceRect(r);
+    for (const c of h.bumpers) bounceDisc(c);
+
+    const dc = Math.hypot(ball.x - h.cup.x, ball.y - h.cup.y);
+    const sp = Math.hypot(ball.vx, ball.vy);
+    if (dc < CUP_R) {
+      if (sp < SINK_SPEED) { sink(); return; }
+      // too quick to drop: the cup still tugs at it, which is the lip-out
+      ball.vx += (h.cup.x - ball.x) * 1.6 * s * 60 * .02;
+      ball.vy += (h.cup.y - ball.y) * 1.6 * s * 60 * .02;
+    }
+    for (const r of h.water) if (inRect(ball, r)) { penalty(); return; }
+  }
+  if (Math.hypot(ball.vx, ball.vy) < STOP) {
+    ball.vx = ball.vy = 0; moving = false;
+    restPos = { x: ball.x, y: ball.y };
+    if (strokes >= MAX_STROKES) finishHole(true);
+  }
+}
+
+function shoot(dirx, diry, power) {
+  const sp = SPEED_MIN + power * (SPEED_MAX - SPEED_MIN);
+  ball.vx = dirx * sp; ball.vy = diry * sp;
+  restPos = { x: ball.x, y: ball.y };
+  strokes++; moving = true; hud();
+  blip(430, .06, 'triangle', .05);
+}
+
+function penalty() {
+  strokes++; splash = 1;
+  ball.x = restPos.x; ball.y = restPos.y; ball.vx = ball.vy = 0; moving = false;
+  hud();
+  blip(180, .22, 'sine', .05);
+  if (strokes >= MAX_STROKES) finishHole(true);
+}
+
+function sink() {
+  ball.sunk = 1; ball.vx = ball.vy = 0; moving = false; sinkT = 0;
+  blip(880, .09, 'sine', .06);
+  setTimeout(() => blip(1240, .12, 'sine', .05), 90);
+  finishHole(false);
+}
+
+function finishHole(pickedUp) {
+  // The hole is over the moment it is over: without this, a tap during the
+  // result toast took another stroke, ended the hole a second time, and
+  // advanced twice — which left the skipped hole with no score at all.
+  if (holeOver) return;
+  holeOver = true;
+  const par = COURSE[hole].par;
+  const score = pickedUp ? MAX_STROKES : strokes;
+  card[hole] = score;
+  const d = score - par;
+  const name = pickedUp ? 'PICKED UP'
+    : d <= -2 ? 'EAGLE' : d === -1 ? 'BIRDIE' : d === 0 ? 'PAR' : d === 1 ? 'BOGEY' : '+' + d;
+  toast(name, 'hole ' + (hole + 1) + ' · ' + score + ' strokes');
+  setTimeout(() => {
+    if (hole < 8) startHole(hole + 1); else endRound();
+  }, 1150);
+}
+
+let toastT = null;
+function toast(big, sub) {
+  $('tBig').textContent = big; $('tSub').textContent = sub;
+  $('toast').classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => $('toast').classList.remove('show'), 1050);
+}
+
+/* ------------------------------------------------------------- drawing */
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
   ctx.closePath();
-  return true;
 }
+const R = (r, pad) => roundRect(sx(r.x) - (pad || 0), sy(r.y) - (pad || 0),
+                                r.w * scale + 2 * (pad || 0), r.h * scale + 2 * (pad || 0), 6);
 
-/* --------------------------------------------------------------- colours */
-const fogStart = 24, fogEnd = 72;      // pipes
-const SLAB_FOG  = [0.82, 12, 32];      // [strength, start, end] floor / ceiling
-const TOWER_FOG = [0.92, 10, 70];
+function render(t) {
+  ctx.clearRect(0, 0, SW, SH);
+  if (mode !== 'play') return;
+  const h = COURSE[hole];
 
-/* fog lets the corridor dissolve into the void while the pipes, which need
-   to stay readable, keep their colour much longer. */
-const FOG_STEPS = 6;                   // depth reads as flat bands, not a blur
-function shade(rgb, mul, z, fog) {
-  const fs = fog ? fog[1] : fogStart, fe = fog ? fog[2] : fogEnd;
-  const raw = Math.max(0, Math.min(1, (z - fs) / (fe - fs))) * (fog ? fog[0] : 0.3);
-  const f = Math.round(raw * FOG_STEPS) / FOG_STEPS;
-  const v = P.void;
-  const r = rgb[0] * mul * (1 - f) + v[0] * f;
-  const g = rgb[1] * mul * (1 - f) + v[1] * f;
-  const b = rgb[2] * mul * (1 - f) + v[2] * f;
-  return 'rgb(' + q(r) + ',' + q(g) + ',' + q(b) + ')';
-}
-/* Every colour lands on a rung of a 32-step ladder. A limited palette is
-   what separates pixel art from a small screenshot. */
-const q = v => Math.min(248, Math.max(0, Math.round(v / 8) * 8));
-const css = rgb => 'rgb(' + q(rgb[0]) + ',' + q(rgb[1]) + ',' + q(rgb[2]) + ')';
+  // the felt, with mowing stripes so the eye has something to hold on to
+  ctx.save();
+  roundRect(sx(0), sy(0), CW * scale, CH * scale, 14);
+  ctx.fillStyle = '#8ec89a'; ctx.fill();
+  ctx.clip();
+  ctx.fillStyle = 'rgba(255,255,255,.07)';
+  const band = 9 * scale;
+  for (let y = 0; y < CH * scale; y += band * 2) ctx.fillRect(sx(0), sy(0) + y, CW * scale, band);
 
-const FACE = { front: 1.0, back: .66, left: .74, right: .82, top: 1.22, bottom: .52 };
+  for (const r of h.sand) { R(r); ctx.fillStyle = '#e9d2a3'; ctx.fill(); }
+  for (const r of h.water) {
+    R(r); ctx.fillStyle = '#8ab7e0'; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < 3; i++) {
+      const yy = sy(r.y + r.h * (i + 1) / 4);
+      ctx.moveTo(sx(r.x) + 8, yy + Math.sin(t * 2 + i) * 2);
+      ctx.lineTo(sx(r.x + r.w) - 8, yy + Math.cos(t * 2 + i) * 2);
+    }
+    ctx.stroke();
+  }
 
-/* Axis-aligned box, back-face culled. */
-function box(x0, x1, y0, y1, z0, z1, rgb, fog, outline) {
-  const V = [
-    [x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0],
-    [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]
-  ].map(v => toCam(v[0], v[1], v[2]));
+  // the cup, then the flag: a hole you can see from across the green
+  const cxp = sx(h.cup.x), cyp = sy(h.cup.y), cr = CUP_R * scale;
+  ctx.beginPath(); ctx.arc(cxp, cyp + 2, cr, 0, 7); ctx.fillStyle = 'rgba(0,0,0,.16)'; ctx.fill();
+  ctx.beginPath(); ctx.arc(cxp, cyp, cr, 0, 7); ctx.fillStyle = '#2b3a2f'; ctx.fill();
+  ctx.beginPath(); ctx.arc(cxp, cyp, cr * .72, 0, 7); ctx.fillStyle = '#18251b'; ctx.fill();
+  if (!ball.sunk) {
+    ctx.strokeStyle = '#23262e'; ctx.lineWidth = Math.max(2, scale * .5); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(cxp, cyp); ctx.lineTo(cxp, cyp - 26 * scale * .55); ctx.stroke();
+    ctx.beginPath();
+    const fy = cyp - 26 * scale * .55;
+    ctx.moveTo(cxp, fy); ctx.lineTo(cxp + 11 * scale * .55, fy + 4 * scale * .55);
+    ctx.lineTo(cxp, fy + 8 * scale * .55); ctx.closePath();
+    ctx.fillStyle = '#e8593c'; ctx.fill();
+  }
 
-  const faces = [
-    { i: [0, 1, 2, 3], k: 'front',  vis: cam.z < z0, z: z0 },
-    { i: [5, 4, 7, 6], k: 'back',   vis: cam.z > z1, z: z1 },
-    { i: [4, 0, 3, 7], k: 'left',   vis: cam.x < x0, z: (z0 + z1) / 2 },
-    { i: [1, 5, 6, 2], k: 'right',  vis: cam.x > x1, z: (z0 + z1) / 2 },
-    { i: [3, 2, 6, 7], k: 'top',    vis: cam.y > y1, z: (z0 + z1) / 2 },
-    { i: [4, 5, 1, 0], k: 'bottom', vis: cam.y < y0, z: (z0 + z1) / 2 }
-  ];
+  for (const c of h.bumpers) {
+    ctx.beginPath(); ctx.arc(sx(c.x), sy(c.y) + 3, c.r * scale, 0, 7);
+    ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(sx(c.x), sy(c.y), c.r * scale, 0, 7);
+    ctx.fillStyle = '#e8593c'; ctx.fill();
+    ctx.beginPath(); ctx.arc(sx(c.x), sy(c.y), c.r * scale * .55, 0, 7);
+    ctx.fillStyle = 'rgba(255,255,255,.28)'; ctx.fill();
+  }
+  for (const r of h.walls) {
+    R(r, 0); ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.translate(0, 3); ctx.fill(); ctx.translate(0, -3);
+    R(r, 0); ctx.fillStyle = '#3a4150'; ctx.fill();
+    R({ x: r.x, y: r.y, w: r.w, h: Math.min(r.h, 2.2) }, 0);
+    ctx.fillStyle = '#4d566a'; ctx.fill();
+  }
+  ctx.restore();
 
-  for (const f of faces) {
-    if (!f.vis) continue;
-    if (!path(f.i.map(n => V[n]))) continue;
-    const d = Math.max(NEAR, f.z - cam.z);
-    ctx.fillStyle = shade(rgb, FACE[f.k], d, fog);
-    ctx.fill();
-    if (outline !== false) {
-      ctx.strokeStyle = shade(rgb, FACE[f.k] * .72, d, fog);
-      ctx.lineWidth = 1;
-      ctx.stroke();
+  // the aim: a line of dots that grows with the pull, and never lies
+  if (aim && !moving && !ball.sunk) {
+    const dots = 5 + Math.round(aim.power * 9);
+    for (let i = 1; i <= dots; i++) {
+      const d = i * 3.4 * scale * (.5 + aim.power);
+      const x = sx(ball.x) + aim.dx * d, y = sy(ball.y) + aim.dy * d;
+      ctx.beginPath(); ctx.arc(x, y, Math.max(1.4, scale * .3), 0, 7);
+      ctx.fillStyle = 'rgba(35,38,46,' + (.55 - i / dots * .35).toFixed(2) + ')'; ctx.fill();
     }
   }
-}
 
-/* A flat front face reads as cardboard. One lit band and one shaded band
-   down the face, and the same box reads as a tube. */
-function pipeShading(y0, y1, z) {
-  if (cam.z >= z || y1 - y0 < .2) return;
-  const d = Math.max(NEAR, z - cam.z);
-  const l0 = -PIPE_W / 2 + PIPE_W * .13, l1 = -PIPE_W / 2 + PIPE_W * .33;
-  if (path([toCam(l0, y0, z), toCam(l1, y0, z), toCam(l1, y1, z), toCam(l0, y1, z)])) {
-    ctx.fillStyle = shade(P.pipe, 1.3, d); ctx.fill();
+  // the ball
+  if (!ball.sunk || sinkT < .5) {
+    const k = ball.sunk ? Math.max(0, 1 - sinkT * 2.4) : 1;
+    const bx = sx(ball.x), by = sy(ball.y), br = BALL_R * scale * k;
+    ctx.beginPath(); ctx.arc(bx, by + 2.5, br, 0, 7); ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(bx, by, br, 0, 7); ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.beginPath(); ctx.arc(bx - br * .3, by - br * .3, br * .34, 0, 7);
+    ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.fill();
   }
-  const r0 = PIPE_W / 2 - PIPE_W * .2;
-  if (path([toCam(r0, y0, z), toCam(PIPE_W / 2, y0, z), toCam(PIPE_W / 2, y1, z), toCam(r0, y1, z)])) {
-    ctx.fillStyle = shade(P.pipe, .74, d); ctx.fill();
-  }
-}
 
-function drawPipe(p) {
-  const gapB = p.gapY - GAP / 2, gapT = p.gapY + GAP / 2;
-  const x0 = -PIPE_W / 2, x1 = PIPE_W / 2;
-  const z0 = p.z - PIPE_D / 2, z1 = p.z + PIPE_D / 2;
-  const cx0 = x0 - CAP_OUT, cx1 = x1 + CAP_OUT;
-  const cz0 = z0 - CAP_OUT, cz1 = z1 + CAP_OUT;
-
-  box(x0, x1, FLOOR, gapB - CAP_H, z0, z1, P.pipe);      // bottom body
-  box(x0, x1, gapT + CAP_H, CEIL, z0, z1, P.pipe);       // top body
-  pipeShading(FLOOR, gapB - CAP_H, z0);
-  pipeShading(gapT + CAP_H, CEIL, z0);
-  box(cx0, cx1, gapB - CAP_H, gapB, cz0, cz1, P.lip);    // bottom lip
-  box(cx0, cx1, gapT, gapT + CAP_H, cz0, cz1, P.lip);    // top lip
-}
-
-/* -------------------------------------------------------------- scenery */
-/* Three colours and a 4x4 Bayer matrix. Ordered dithering is the oldest way
-   to make a gradient out of almost nothing, and still the one that looks
-   hand-made rather than computed: nine tones, scattered, instead of a ramp.
-   The sky is rebuilt only when the eased palette has actually moved. */
-const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
-const SKY_STEPS = 5;
-const skyCv = document.createElement('canvas');
-const skyCtx = skyCv.getContext('2d');
-let skyKey = '';
-
-function buildSky() {
-  if (skyCv.width !== W || skyCv.height !== H) { skyCv.width = W; skyCv.height = H; }
-  const img = skyCtx.createImageData(W, H), d = img.data;
-  for (let y = 0; y < H; y++) {
-    const u = y / (H - 1);
-    const a = u < .5 ? P.sky[0] : P.sky[1], b = u < .5 ? P.sky[1] : P.sky[2];
-    const k = (u < .5 ? u * 2 : (u - .5) * 2) * (SKY_STEPS - 1);
-    const lo = Math.min(SKY_STEPS - 2, Math.floor(k)), fr = k - lo;
-    for (let x = 0; x < W; x++) {
-      const on = fr > (BAYER[(y & 3) * 4 + (x & 3)] + .5) / 16 ? 1 : 0;
-      const step = (lo + on) / (SKY_STEPS - 1);
-      const i = (y * W + x) << 2;
-      d[i]     = a[0] + (b[0] - a[0]) * step;
-      d[i + 1] = a[1] + (b[1] - a[1]) * step;
-      d[i + 2] = a[2] + (b[2] - a[2]) * step;
-      d[i + 3] = 255;
-    }
-  }
-  skyCtx.putImageData(img, 0, 0);
-}
-
-function drawSky() {
-  const key = W + '|' + P.sky.map(c => c.map(v => v >> 3).join()).join();
-  if (key !== skyKey) { skyKey = key; buildSky(); }
-  ctx.drawImage(skyCv, 0, 0);
-}
-
-/* Slabs are drawn as depth strips so the fog is computed per-distance
-   instead of as a flat screen-space gradient. */
-/* Light panels overhead. The ceiling is half the screen and had nothing to
-   say; strung out at a fixed spacing they stream past, which is also the
-   clearest read the player gets on how fast the corridor is moving. */
-const LAMP = 8.4;
-function ceilingLights() {
-  const first = Math.floor(cam.z / LAMP);
-  for (let k = 5; k >= 0; k--) {
-    const z = (first + k) * LAMP, d = z - cam.z;
-    if (d < NEAR || d > SLAB_FOG[2]) continue;
-    if (!path([toCam(-2.4, CEIL - .03, z), toCam(2.4, CEIL - .03, z),
-               toCam(2.4, CEIL - .03, z + 1.5), toCam(-2.4, CEIL - .03, z + 1.5)])) continue;
-    ctx.fillStyle = shade(P.lip, 1.1, Math.max(NEAR, d), SLAB_FOG);
-    ctx.fill();
+  if (splash > 0) {
+    splash = Math.max(0, splash - .02);
+    ctx.beginPath(); ctx.arc(sx(ball.x), sy(ball.y), (1 - splash) * 26 * scale * .5, 0, 7);
+    ctx.strokeStyle = 'rgba(138,183,224,' + splash.toFixed(2) + ')';
+    ctx.lineWidth = 3; ctx.stroke();
   }
 }
 
-const TILE = 4.2, TILE_COLS = 5;
-const lerp3 = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
-/* Tiles anchored in the world, not to the camera, so the floor streams past
-   instead of sitting still under you. Two shades in a checker is all it takes
-   to feel the speed — a hairline grid never did. */
-function drawSlab(y, rgb, mul) {
-  const near = -8, far = SLAB_FOG[2];
-  const first = Math.floor((cam.z + near) / TILE);
-  const span = HALF_W * 2 / TILE_COLS;
-  for (let k = Math.ceil((far - near) / TILE); k >= 0; k--) {
-    const za = (first + k) * TILE, zb = za + TILE + .1;
-    if (zb - cam.z < NEAR) continue;
-    const d = Math.max(NEAR, (za + zb) / 2 - cam.z);
-    for (let c = 0; c < TILE_COLS; c++) {
-      const xa = -HALF_W + span * c, xb = xa + span + .04;
-      if (!path([toCam(xa, y, za), toCam(xb, y, za), toCam(xb, y, zb), toCam(xa, y, zb)])) continue;
-      const dark = ((first + k + c) & 1) === 0;
-      ctx.fillStyle = shade(dark ? lerp3(rgb, P.void, .2) : rgb, mul * (dark ? .84 : 1), d, SLAB_FOG);
-      ctx.fill();
-    }
-  }
-}
-
-const BASE_Y = FLOOR - 9;               // the skyline stands below the corridor
-
-const TOWER_LOD = 46;                   // past this, a silhouette is one block
-
-function drawTower(w) {
-  const c = [P.tower[0] * w.tint, P.tower[1] * w.tint, P.tower[2] * w.tint];
-  const blk = (x, y0, y1, bw, bd) =>
-    box(x - bw / 2, x + bw / 2, y0, y1, w.z - bd / 2, w.z + bd / 2, c, TOWER_FOG, false);
-
-  if (w.z - cam.z > TOWER_LOD) {        // too far and too fogged for detail
-    blk(w.x, BASE_Y, BASE_Y + w.lh, w.lw, w.ld);
-  } else if (w.style === 1) {                  // spire: shaft, narrower crown, needle
-    blk(w.x, BASE_Y, BASE_Y + w.h * .58, w.w, w.d);
-    blk(w.x, BASE_Y + w.h * .58, BASE_Y + w.h, w.w * .56, w.d * .56);
-    blk(w.x, BASE_Y + w.h, BASE_Y + w.h * 1.3, w.w * .16, w.d * .16);
-  } else if (w.style === 2) {           // mesa: broad slab under a small cap
-    blk(w.x, BASE_Y, BASE_Y + w.h * .6, w.w * 1.8, w.d * 1.8);
-    blk(w.x, BASE_Y + w.h * .6, BASE_Y + w.h * .76, w.w * .7, w.d * .7);
-  } else if (w.style === 3) {           // stack: blocks shrinking and leaning
-    let y = BASE_Y, bw = w.w * 1.3, bd = w.d * 1.3, x = w.x;
-    for (let k = 0; k < 3; k++) {
-      const hh = w.h * (.44 - k * .09);
-      blk(x, y, y + hh, bw, bd);
-      y += hh; bw *= .72; bd *= .72; x += w.tilt * bw * .5;
-    }
-  } else {                              // plain block
-    blk(w.x, BASE_Y, BASE_Y + w.h, w.w, w.d);
-  }
-}
-
-/* Lit windows, on the near ones only — far enough away the fog eats them
-   anyway, and a skyline with a few lights on is a place rather than a shape. */
-function towerLights(w) {
-  const z = w.z - w.d / 2, d = z - cam.z;
-  if (d < NEAR || d > 34) return;
-  ctx.fillStyle = shade(P.lip, .72, d, TOWER_FOG);
-  const rows = 3 + ((w.tint * 7) | 0) % 3;
-  for (let r = 0; r < rows; r++) {
-    const y = BASE_Y + w.h * (.24 + .58 * (rows < 2 ? .5 : r / (rows - 1)));
-    const x = w.x - w.w * .22 + ((r + (w.tilt > 0 ? 1 : 0)) % 2) * w.w * .3;
-    if (path([toCam(x, y, z), toCam(x + w.w * .17, y, z),
-              toCam(x + w.w * .17, y + w.h * .045, z), toCam(x, y + w.h * .045, z)])) ctx.fill();
-  }
-}
-
-function drawTowers() {
-  const sorted = towers.slice().sort((a, b) => b.z - a.z);
-  for (const w of sorted) {
-    if (w.z - cam.z < NEAR) continue;
-    drawTower(w);
-    towerLights(w);
-  }
-}
-
-function drawStars() {
-  // barely tinted by the zone, so even the star field belongs to the palette
-  const sr = (510 + P.lip[0]) / 3 | 0, sg = (510 + P.lip[1]) / 3 | 0, sb = (510 + P.lip[2]) / 3 | 0;
-  const tint = sr + ',' + sg + ',' + sb + ',';
-  for (const s of stars) {
-    const c = toCam(s.x, s.y, s.z);
-    if (c.z < 5) continue;
-    const sx = cx + focal * c.x / c.z, sy = cy - focal * c.y / c.z;
-    const sz = Math.min(7, Math.max(1, focal * s.s / c.z));
-    const fade = Math.min(1, (c.z - 5) / 6) * (1 - c.z / (SPAWN_Z + 20));
-    ctx.fillStyle = 'rgba(' + tint + Math.max(0, 0.7 * fade).toFixed(3) + ')';
-    ctx.fillRect(sx - sz / 2, sy - sz / 2, sz, sz);
-  }
-}
-
-/* In first person the hard part is reading how high the next gap sits.
-   Outline its opening, faintly, and only once it is close enough to matter. */
-function drawGuide() {
-  if (state !== 'play') return;
-  let next = null;
-  for (const p of pipes) if (p.z > cam.z && (!next || p.z < next.z)) next = p;
-  if (!next) return;
-  const d = next.z - cam.z;
-  if (d > 32 || d < 3) return;
-  // it fades in from far away and out again once you are committed, so it
-  // helps you aim and never draws over the gap you are flying through
-  const a = .45 * Math.min(1, (32 - d) / 12) * Math.min(1, (d - 3) / 5);
-  if (a < .02) return;
-  const z = next.z - PIPE_D / 2 - CAP_OUT;
-  const x0 = -PIPE_W / 2 - CAP_OUT, x1 = PIPE_W / 2 + CAP_OUT;
-  const y0 = next.gapY - GAP / 2, y1 = next.gapY + GAP / 2;
-  const pr = v => v.z < NEAR ? null : { x: cx + focal * v.x / v.z, y: cy - focal * v.y / v.z };
-  const c = [pr(toCam(x0, y1, z)), pr(toCam(x1, y1, z)), pr(toCam(x1, y0, z)), pr(toCam(x0, y0, z))];
-  if (c.some(v => !v)) return;
-  const len = Math.max(2, Math.min(7, (c[1].x - c[0].x) * .26));
-  ctx.strokeStyle = 'rgba(255,255,255,' + a.toFixed(3) + ')';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  const arms = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
-  for (let i = 0; i < 4; i++) {
-    const v = c[i], s2 = arms[i];
-    ctx.moveTo(v.x, v.y + len * s2[1]); ctx.lineTo(v.x, v.y); ctx.lineTo(v.x + len * s2[0], v.y);
-  }
-  ctx.stroke();
-}
-
-/* -------------------------------------------------------------- pixel ui
-   A 5x7 bitmap font drawn into the buffer like everything else, so every
-   readout sits on the same pixel grid as the world. Each glyph is 7 rows of
-   5 cells, written end to end. */
-const FONT = {
-  '0': '.###.#...##...##...##...##...#.###.',
-  '1': '..#...##....#....#....#....#...###.',
-  '2': '.###.#...#....#...#...#...#...#####',
-  '3': '#####...#...#.....#.....##...#.###.',
-  '4': '...#...##..#.#.#..#.#####...#....#.',
-  '5': '######....####.....#....##...#.###.',
-  '6': '..##..#...#....####.#...##...#.###.',
-  '7': '#####....#...#...#...#....#....#...',
-  '8': '.###.#...##...#.###.#...##...#.###.',
-  '9': '.###.#...##...#.####....#...#..##..',
-  'A': '.###.#...##...#######...##...##...#',
-  'B': '####.#...##...#####.#...##...#####.',
-  'C': '.###.#...##....#....#....#...#.###.',
-  'D': '###..#..#.#...##...##...##..#.###..',
-  'E': '######....#....####.#....#....#####',
-  'F': '######....#....####.#....#....#....',
-  'G': '.###.#...##....#.####...##...#.###.',
-  'H': '#...##...##...#######...##...##...#',
-  'I': '.###...#....#....#....#....#...###.',
-  'J': '..###...#....#....#....#.#..#..##..',
-  'K': '#...##..#.#.#..##...#.#..#..#.#...#',
-  'L': '#....#....#....#....#....#....#####',
-  'M': '#...###.###.#.##.#.##...##...##...#',
-  'N': '#...###..##.#.##..###...##...##...#',
-  'O': '.###.#...##...##...##...##...#.###.',
-  'P': '####.#...##...#####.#....#....#....',
-  'Q': '.###.#...##...##...##.#.##..#..##.#',
-  'R': '####.#...##...#####.#.#..#..#.#...#',
-  'S': '.#####....#.....###.....#....#####.',
-  'T': '#####..#....#....#....#....#....#..',
-  'U': '#...##...##...##...##...##...#.###.',
-  'V': '#...##...##...##...##...#.#.#...#..',
-  'W': '#...##...##...##.#.##.#.###.###...#',
-  'X': '#...##...#.#.#...#...#.#.#...##...#',
-  'Y': '#...##...#.#.#...#....#....#....#..',
-  'Z': '#####....#...#...#...#...#....#####',
-  '!': '..#....#....#....#....#.........#..',
-  '.': '................................#..',
-  ' ': '...................................',
-};
-
-function text(str, x, y, s, col) {
-  ctx.fillStyle = col;
-  let px = x;
-  for (const ch of str) {
-    const g = FONT[ch];
-    if (g) {
-      for (let r = 0; r < 7; r++) {
-        for (let c = 0; c < 5; c++) if (g[r * 5 + c] === '#') ctx.fillRect(px + c * s, y + r * s, s, s);
-      }
-    }
-    px += 6 * s;
-  }
-}
-function textW(str, s) { return str.length * 6 * s - s; }
-function textC(str, xc, y, s, col, outline) {
-  const x = Math.round(xc - textW(str, s) / 2);
-  if (outline) {                       // one pixel of black, never a halo
-    text(str, x - 1, y, s, outline); text(str, x + 1, y, s, outline);
-    text(str, x, y - 1, s, outline); text(str, x, y + 1, s, outline);
-  }
-  text(str, x, y, s, col);
-}
-function panel(x, y, w, h) {
-  ctx.fillStyle = 'rgba(0,0,0,.5)';
-  ctx.fillRect(x + 3, y + 3, w, h);        // a hard drop shadow, never a blur
-  ctx.fillStyle = '#0a0812';
-  ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = css(P.lip);
-  ctx.fillRect(x, y, w, 2); ctx.fillRect(x, y + h - 2, w, 2);
-  ctx.fillRect(x, y, 2, h); ctx.fillRect(x + w - 2, y, 2, h);
-}
-
-function drawUI() {
-  const blink = (t % 1.3) < .82;
-  if (state === 'play') {
-    const s = t - poppedAt < .13 ? 5 : 4;          // the score jumps on a point
-    textC(String(score), cx, Math.round(H * .07), s, '#fff', '#000');
-    return;
-  }
-  if (state === 'start') {
-    const w = Math.min(W - 10, 118), x = Math.round(cx - w / 2), y = Math.round(cy - 41);
-    panel(x, y, w, 82);
-    textC('FLAPPY', cx, y + 12, 2, '#fff');
-    textC('FPV', cx, y + 30, 4, css(P.lip));
-    if (blink) textC('TAP TO FLY', cx, y + 66, 1, '#fff');
-    return;
-  }
-  const w = Math.min(W - 10, 122), x = Math.round(cx - w / 2), y = Math.round(cy - 50);
-  panel(x, y, w, 100);
-  textC('GAME', cx, y + 9, 2, '#ff5f5f');
-  textC('OVER', cx, y + 27, 2, '#ff5f5f');
-  ctx.fillStyle = css(P.lip);
-  ctx.fillRect(x + 10, y + 46, w - 20, 1);
-  textC('SCORE', x + w * .28, y + 54, 1, '#8fa0b4');
-  textC(String(score), x + w * .28, y + 64, 2, '#fff');
-  textC('BEST', x + w * .72, y + 54, 1, '#8fa0b4');
-  textC(String(best), x + w * .72, y + 64, 2, css(P.lip));
-  if (t - deadAt > .55 && blink) textC('TAP TO RETRY', cx, y + 86, 1, '#fff');
-}
-
-/* ----------------------------------------------------------------- audio */
+/* --------------------------------------------------------------- audio */
 let ac = null;
-function beep(freq, dur, type, vol) {
+function blip(freq, dur, type, vol) {
   try {
     if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
     if (ac.state === 'suspended') ac.resume();
     const o = ac.createOscillator(), g = ac.createGain();
-    o.type = type || 'square';
+    o.type = type || 'sine';
     o.frequency.setValueAtTime(freq, ac.currentTime);
-    o.frequency.exponentialRampToValueAtTime(freq * .6, ac.currentTime + dur);
     g.gain.setValueAtTime(vol || .05, ac.currentTime);
     g.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + dur);
     o.connect(g); g.connect(ac.destination);
@@ -707,130 +648,178 @@ function beep(freq, dur, type, vol) {
   } catch (e) { /* audio is optional */ }
 }
 
-/* ------------------------------------------------------------------ loop */
-function flap() {
-  if (state === 'dead') {
-    if (t - deadAt < .55) return;   // ignore the tap that killed you
-    reset();
-    state = 'play';
+/* --------------------------------------------------------------- input
+   Pull back from anywhere and let go — the ball leaves along the opposite
+   of the drag, which is how every touch golf game has worked since Desert
+   Golfing, and needs no explaining. */
+const PULL = () => Math.min(SW, SH) * .30;
+
+function pos(e) { return { x: e.clientX, y: e.clientY }; }
+cv.addEventListener('pointerdown', e => {
+  if (mode !== 'play' || moving || ball.sunk || holeOver) return;
+  e.preventDefault();
+  aim = { from: pos(e), dx: 0, dy: 0, power: 0 };
+});
+cv.addEventListener('pointermove', e => {
+  if (!aim) return;
+  const p = pos(e);
+  const dx = aim.from.x - p.x, dy = aim.from.y - p.y;
+  const len = Math.hypot(dx, dy);
+  aim.power = Math.min(1, len / PULL());
+  if (len > 1) { aim.dx = dx / len; aim.dy = dy / len; }
+});
+window.addEventListener('pointerup', () => {
+  if (!aim) return;
+  if (aim.power > .06) shoot(aim.dx, aim.dy, aim.power);
+  aim = null;
+});
+window.addEventListener('pointercancel', () => { aim = null; });
+document.addEventListener('touchstart', e => { if (mode === 'play') e.preventDefault(); }, { passive: false });
+
+/* --------------------------------------------------------- leaderboard
+   Local, and honest about it: every player on this device gets a line, best
+   score per name, cleared when tomorrow's course opens. A shared board needs
+   a server — swapping readBoard/writeBoard is the whole job. */
+function readBoard() {
+  try {
+    const all = JSON.parse(localStorage.getItem('golfBoard') || '{}');
+    return all[DAY_KEY] || [];
+  } catch (e) { return []; }
+}
+function writeBoard(list) {
+  try {
+    const all = JSON.parse(localStorage.getItem('golfBoard') || '{}');
+    all[DAY_KEY] = list;
+    for (const k of Object.keys(all)) if (k < DAY_KEY && Object.keys(all).length > 8) delete all[k];
+    localStorage.setItem('golfBoard', JSON.stringify(all));
+  } catch (e) { /* private mode: the round still counts, it just is not kept */ }
+}
+function postScore(name, total) {
+  const list = readBoard();
+  const found = list.find(e => e.name.toLowerCase() === name.toLowerCase());
+  if (found) { if (total < found.score) found.score = total; }
+  else list.push({ name, score: total });
+  list.sort((a, b) => a.score - b.score);
+  writeBoard(list);
+  return list;
+}
+function drawBoard(el, list, mine) {
+  el.innerHTML = '';
+  if (!list.length) {
+    el.innerHTML = '<div class="empty">Nobody has posted a round yet today.<br>Play the course and put your name up.</div>';
     return;
   }
-  state = 'play';                   // the tap that starts the run also flaps,
-  cam.vy = FLAP;                    // so a run never opens on a free fall
-  beep(520, .09, 'square', .045);
+  list.forEach((e, i) => {
+    const d = document.createElement('div');
+    d.className = 'rowe' + (mine && e.name === mine ? ' me' : '');
+    const rel = e.score - TOTAL_PAR;
+    d.innerHTML = '<div class="pos">' + (i + 1) + '</div><div class="who"></div>' +
+                  '<div class="sc">' + e.score + ' <span style="font-size:12px;color:inherit;opacity:.6">' +
+                  (rel === 0 ? 'E' : rel > 0 ? '+' + rel : rel) + '</span></div>';
+    d.querySelector('.who').textContent = e.name;
+    el.appendChild(d);
+  });
 }
 
-function die() {
-  state = 'dead'; deadAt = t; shake = 1;
-  beep(160, .35, 'sawtooth', .07);
-  if (score > best) {
-    best = score;
-    try { localStorage.setItem('flappyFpvBest', String(best)); } catch (e) { /* ignore */ }
-  }
+/* -------------------------------------------------------------- screens */
+function show(name) {
+  mode = name;
+  for (const id of ['scTitle', 'scRound', 'scBoard']) $(id).hidden = true;
+  $('hud').hidden = name !== 'play';
+  if (name === 'play') return;
+  $(name === 'title' ? 'scTitle' : name === 'round' ? 'scRound' : 'scBoard').hidden = false;
 }
 
-function update(dt) {
-  t += dt;
+function fmtRel(n) { return n === 0 ? 'E' : n > 0 ? '+' + n : String(n); }
 
-  if (state === 'start') {
-    cam.y = Math.sin(t * 1.6) * .45;
-    cam.pitch = Math.sin(t * 1.6) * .05;
-    cam.z += 2.1 * dt;
-  } else if (state === 'play') {
-    speed = BASE_SPEED + Math.min(score * .07, 3.2);
-    cam.vy = Math.max(MAX_FALL, cam.vy + GRAVITY * dt);
-    cam.y += cam.vy * dt;
-    cam.z += speed * dt;
-
-    // the ceiling is a wall you scrape along, not a trap: only the floor
-    // and the pipes end a run
-    if (cam.y + RADIUS > CEIL) { cam.y = CEIL - RADIUS; if (cam.vy > 0) cam.vy = 0; }
-    if (cam.y - RADIUS < FLOOR) { cam.y = FLOOR + RADIUS; die(); }
-
-    for (const p of pipes) {
-      const half = PIPE_D / 2 + CAP_OUT + HIT;
-      if (Math.abs(p.z - cam.z) < half) {
-        if (cam.y - HIT < p.gapY - GAP / 2 || cam.y + HIT > p.gapY + GAP / 2) { die(); break; }
-      }
-      if (!p.scored && p.z < cam.z) {
-        p.scored = true; score++; poppedAt = t;
-        beep(880, .08, 'triangle', .05);
-      }
-    }
-  } else {
-    cam.vy = Math.max(MAX_FALL, cam.vy + GRAVITY * 1.4 * dt);
-    cam.y = Math.max(FLOOR + 0.9, cam.y + cam.vy * dt);
-    shake = Math.max(0, shake - dt * 2.5);
-  }
-
-  easeZone(dt);
-
-  // once dead, level the view back up so the crash still shows the corridor
-  const wantPitch = state === 'play' ? Math.max(-.34, Math.min(.26, cam.vy * .03))
-                  : state === 'dead' ? .12 : cam.pitch;
-  cam.pitch += (wantPitch - cam.pitch) * Math.min(1, dt * 9);
-
-  // recycle
-  pipes = pipes.filter(p => p.z > cam.z - 8);
-  let far = cam.z;
-  for (const p of pipes) far = Math.max(far, p.z);
-  while (far < cam.z + SPAWN_Z) { far += SPACING; addPipe(far); }
-
-  for (const s of stars) {
-    if (s.z < cam.z - 3) seedStar(s, cam.z + SPAWN_Z + Math.random() * 12);
-  }
-  for (const w of towers) if (w.z < cam.z - 6) seedTower(w, cam.z + SPAWN_Z + Math.random() * 20);
+function fillTitle() {
+  $('courseNo').textContent = '#' + COURSE_NO;
+  $('tPar').textContent = TOTAL_PAR;
+  $('tDate').textContent = new Date(T.y, T.m, T.d)
+    .toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+  const me = localStorage.getItem('golfName');
+  const mine = readBoard().find(e => me && e.name === me);
+  $('tBest').textContent = mine
+    ? 'your best ' + mine.score + ' (' + fmtRel(mine.score - TOTAL_PAR) + ')'
+    : 'not played yet';
+  const now = new Date(), mid = new Date(now); mid.setHours(24, 0, 0, 0);
+  const s = Math.max(0, (mid - now) / 1000);
+  $('tNext').textContent = 'Next course in ' +
+    String(Math.floor(s / 3600)).padStart(2, '0') + ':' +
+    String(Math.floor(s / 60) % 60).padStart(2, '0') + ':' +
+    String(Math.floor(s) % 60).padStart(2, '0');
 }
 
-function render() {
-  ctx.save();
-  if (shake > 0) ctx.translate(0, Math.round((Math.random() - .5) * 5 * shake));   // vertical, whole pixels
-
-  drawSky();
-  drawTowers();
-  drawSlab(CEIL, P.floor, .44);
-  ceilingLights();
-  drawSlab(FLOOR, P.floor, 1.05);
-  drawStars();
-
-  const sorted = pipes.slice().sort((a, b) => b.z - a.z);
-  for (const p of sorted) drawPipe(p);
-  drawGuide();
-
-  ctx.restore();
-
-  // dim behind the overlays so a card reads against any palette
-  const dim = state === 'dead' ? Math.min(.5, (t - deadAt) * 1.6)
-            : state === 'start' ? .3 : 0;
-  if (dim > 0) {
-    ctx.fillStyle = 'rgba(6,2,14,' + dim.toFixed(3) + ')';
-    ctx.fillRect(0, 0, W, H);
-  }
-
-  drawUI();
-
-  // and now the only line that touches the screen: the small frame, blown up
-  sctx.clearRect(0, 0, SW, SH);
-  sctx.drawImage(buf, 0, 0, SW, SH);
+function endRound() {
+  const total = card.reduce((a, b) => a + b, 0);
+  const rel = total - TOTAL_PAR;
+  $('rNo').textContent = '#' + COURSE_NO;
+  $('rVerdict').textContent = rel < -3 ? 'A round to remember' : rel < 0 ? 'Under par' :
+                              rel === 0 ? 'Level par' : rel <= 3 ? 'Over par' : 'Rough day out';
+  $('rTotal').textContent = total;
+  $('rVsPar').textContent = fmtRel(rel) + ' · par ' + TOTAL_PAR;
+  const g = $('rHoles'); g.innerHTML = '';
+  card.forEach((s, i) => {
+    const d = s - COURSE[i].par;
+    const cell = document.createElement('div');
+    cell.innerHTML = '<div class="n">' + (i + 1) + '</div><div class="s ' +
+      (d < 0 ? 'under' : d === 0 ? 'par' : d === 1 ? 'over' : 'bad') + '">' + s + '</div>';
+    g.appendChild(cell);
+  });
+  const me = localStorage.getItem('golfName') || '';
+  $('rName').value = me;
+  drawBoard($('rBoard'), readBoard(), me);
+  show('round');
 }
 
+function shareText() {
+  const total = card.reduce((a, b) => a + b, 0);
+  const glyph = card.map((s, i) => {
+    const d = s - COURSE[i].par;
+    return d < 0 ? '🟩' : d === 0 ? '⬜' : d === 1 ? '🟨' : '🟥';
+  }).join('');
+  return 'Daily Mini Golf #' + COURSE_NO + '\n' + total + ' (' + fmtRel(total - TOTAL_PAR) + ')\n' + glyph;
+}
+
+$('bPlay').onclick = () => { card = new Array(9).fill(0); startHole(0); show('play'); };
+$('bBoard').onclick = () => {
+  $('bNo').textContent = '#' + COURSE_NO;
+  drawBoard($('bList'), readBoard(), localStorage.getItem('golfName'));
+  show('board');
+};
+$('bHome').onclick = () => { fillTitle(); show('title'); };
+$('back').onclick = () => { fillTitle(); show('title'); };
+$('rHome').onclick = () => { fillTitle(); show('title'); };
+$('rAgain').onclick = () => { card = new Array(9).fill(0); startHole(0); show('play'); };
+$('rPost').onclick = () => {
+  const name = ($('rName').value || '').trim().slice(0, 14);
+  if (!name) { $('rName').focus(); return; }
+  try { localStorage.setItem('golfName', name); } catch (e) { /* ignore */ }
+  const total = card.reduce((a, b) => a + b, 0);
+  drawBoard($('rBoard'), postScore(name, total), name);
+  $('rPost').textContent = 'POSTED';
+};
+$('rShare').onclick = async () => {
+  const txt = shareText();
+  try { await navigator.clipboard.writeText(txt); $('rShare').textContent = 'COPIED'; }
+  catch (e) { $('rShare').textContent = txt.replace(/\n/g, ' · '); }
+};
+
+/* ----------------------------------------------------------------- loop */
+let last = 0;
 function frame(ts) {
-  const dt = Math.min(.05, (ts - lastTs) / 1000 || 0);
-  lastTs = ts;
-  update(dt);
-  render();
+  const dt = Math.min(.05, (ts - last) / 1000 || 0);
+  last = ts;
+  physics(dt);
+  render(ts / 1000);
   requestAnimationFrame(frame);
 }
 
-/* ---------------------------------------------------------------- input */
-cv.addEventListener('pointerdown', e => { e.preventDefault(); flap(); });
-document.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
-window.addEventListener('keydown', e => {
-  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'Enter') { e.preventDefault(); flap(); }
-});
-
-reset();
-requestAnimationFrame(ts => { lastTs = ts; requestAnimationFrame(frame); });
+resize();
+fillTitle();
+setInterval(() => { if (mode === 'title') fillTitle(); }, 1000);
+show('title');
+requestAnimationFrame(ts => { last = ts; requestAnimationFrame(frame); });
 })();
 </script>
 </body>

@@ -1,9 +1,10 @@
-# Flappy FPV
+# Daily Mini Golf
 
-First-person 3D Flappy Bird. One page, no dependencies.
+Nine holes of 2D mini golf, generated from the date. One page, no dependencies,
+no build step. Everyone who opens it on the same day plays the same course.
 
-Tap (or press space) to flap and fly through the gaps. The best score is kept
-locally in the browser.
+Pull back from the ball and let go. Sand slows you down, water costs a stroke,
+the red bumpers are lively. Eight strokes and the hole is picked up.
 
 ## Run it
 
@@ -17,75 +18,55 @@ Then go to http://localhost:8000 — it is built for mobile (portrait).
 
 ## How it works
 
-Everything lives in `index.html`: a small 3D engine written on a 2D canvas.
+Everything lives in `index.html`: the generator, the physics, the rendering
+and the leaderboard.
 
-- everything is drawn into a small buffer — about 260 pixels tall — and blown
-  up with hard edges, so the 3d engine produces pixel art rather than smooth
-  polygons; the score and the cards use a 5×7 bitmap font drawn into the same
-  buffer, so every readout sits on the world's pixel grid
-- hand-rolled perspective projection, with camera pitch
-- near-plane polygon clipping (`clipNear`) for the floor and ceiling, which
-  pass behind the camera
-- pipes drawn as boxes, back faces culled, painter's algorithm for depth
-- separate distance fog for the corridor (which dissolves into the void) and
-  for the pipes (which stay readable), quantised into six flat bands so depth
-  reads as steps rather than a blur
+### The course of the day
 
-### Drawing it like pixel art, not like a small screenshot
+The date is the seed. `2026-09-02` hashes into a stream of numbers, and the
+same nine holes come out of it on every device in the world — no server, no
+agreement, no syncing. Tomorrow's course is already decided and nobody has
+seen it.
 
-The buffer alone only makes the pixels big. What makes the picture read is
-craft applied per surface:
+Holes are composed of rectangles and discs only, which keeps the collisions
+honest and the drawing flat. Each one picks a length class first (a short hole
+puts the tee under the cup, so "short" does not mean "diagonally across the
+green"), then a shape — open, block, gate, baffle, corridor or pocket — placed
+**between the tee and the cup**, because an obstacle anywhere else is scenery.
+Sand, water and bumpers are layered on top, more of them as the round goes on.
 
-- the sky is **ordered dithering**, not a gradient: three colours through a
-  4×4 Bayer matrix give nine scattered tones, rebuilt only when the eased
-  palette has actually moved
-- the corridor is a **checkerboard anchored in the world**, so it streams past
-  instead of sitting still under you; the dark tiles are mixed a fifth of the
-  way toward the void, which ties the floor to the sky
-- the ceiling carries **light panels** at a fixed spacing — it is half the
-  screen and had nothing to say, and they double as the clearest read on speed
-- each pipe gets a **lit band and a shaded band** down its face: a flat front
-  reads as cardboard, two more quads read as a tube
-- the near towers have **lit windows**, which is the difference between a
-  skyline and a row of shapes
-- every colour lands on a rung of a 32-step ladder — a limited palette is what
-  separates pixel art from a small screenshot
+Par is read off the finished hole rather than decided in advance: how far it
+is, and how much is in the way.
 
-Zone colours are still generated, but only the hues roam. Saturation and
-lightness are held in narrow bands with a fixed value structure — a bright sky
-over a deep corridor, every time — because letting them roam is exactly what
-produced the washed-out zones and the muddy ones.
+### Nothing unplayable ships
 
-### Playing fair
+A course nobody can finish is worse than a boring one. Every generated hole is
+flood-filled on a coarse grid, inflated by the ball's radius, and only kept if
+the ball can actually roll from the tee to the cup — otherwise the seed moves
+on and the hole is generated again, deterministically.
 
-Three rules keep a death felt like your own fault:
+Checked over two years of dates: 6570 holes, all reachable, the fallback hole
+never used, and par totals between 26 and 34 with a median of 30.
 
-- the ceiling is a wall you scrape along, not a kill plane — only the floor
-  and the pipes end a run
-- the pipes test a smaller box than they draw, so a hair's breadth reads as a
-  hair's breadth
-- the next gap's opening is outlined faintly, fading in from far away and out
-  again once you are committed: in first person, judging how high the gap sits
-  is the hard part, and guessing is not the game
+### Physics
 
-### Endless scenery
+Exponential damping (much stronger in sand), eight substeps per frame so
+nothing tunnels through a wall, and collisions resolved against the closest
+point of each rectangle — which handles corners without special-casing them.
+The cup only takes the ball below a speed threshold; above it the ball is
+tugged toward the centre and rolls on, which is what a lip-out feels like.
 
-There is no list of zones. Every 104 units flown — about eight pipes — the
-corridor crosses into a new zone, and that zone is *generated* from its index:
-a golden-angle hue walk picks the dominant colour, deterministic noise picks
-the mood, and the skyline gets one of four ways of building itself (blocks,
-spires, mesas, leaning stacks) along with its own spread, height and dust
-grain. The world therefore keeps changing for as long as you keep flying, and
-never loops back to a zone you have already seen.
+### The leaderboard
 
-Zone 0 is the one exception: it is the game's own neon palette, so the first
-flight always looks like Flappy FPV.
+It is local, and the code says so plainly: every player on this device gets a
+line, best score per name, cleared when tomorrow's course opens. That is a real
+board for a phone passed around a table, and an honest one — a shared board
+needs a server, and swapping `readBoard` / `writeBoard` is the whole job.
 
-Two details keep it playable rather than merely colourful:
+The result also copies out as a spoiler-free line, one square per hole:
 
-- pipe lightness is chosen, not assumed — the value whose luminance stands
-  furthest from the corridor and the sky, so the gaps stay readable whatever
-  the zone came out as
-- the live palette eases toward the zone the camera is in, so crossing a
-  border is a fade rather than a cut, and towers spawn `SPAWN_Z` ahead, so
-  the next skyline rises on the horizon before its colours reach you
+```
+Daily Mini Golf #245
+29 (-1)
+⬜🟩🟨⬜🟥🟩⬜🟨⬜
+```
